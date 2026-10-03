@@ -114,9 +114,18 @@ var RULES = [
 	{"flags":[],"group":"security","id":"security.domXss","langs":["jsp","jspf","html","htm","js","jsx","ts","tsx","mjs"],"max":null,"message":"크로스사이트 스크립트(DOM) — 입력이 들어가면 textContent·이스케이프","regex":"\\.(?:innerHTML|outerHTML)\\s*\\+?=(?!=)(?!\\s*[\"']{2}\\s*;)|document\\s*\\.\\s*write(?:ln)?\\s*\\(|insertAdjacentHTML\\s*\\(","severity":"info","skipComments":true},
 	{"flags":[],"group":"security","id":"security.jsxDangerousHtml","langs":["jsx","tsx"],"max":null,"message":"크로스사이트 스크립트 — dangerouslySetInnerHTML","regex":"dangerouslySetInnerHTML","severity":"warn","skipComments":true},
 	{"flags":[],"group":"security","id":"security.jspElParam","langs":["jsp","jspf","tag"],"max":null,"message":"크로스사이트 스크립트 — 요청 파라미터 EL 직접 출력(<c:out> 으로)","regex":"(?<![=\"'(])\\$\\{param\\.","severity":"warn","skipComments":true},
-	{"flags":[],"group":"security","id":"security.fileUpload","langs":["java"],"max":null,"message":"위험한 형식 파일 업로드 — 확장자 허용목록·크기·저장 경로 확인","regex":"getOriginalFilename\\s*\\(","severity":"info","skipComments":true}
+	{"flags":[],"group":"security","id":"security.fileUpload","langs":["java"],"max":null,"message":"위험한 형식 파일 업로드 — 확장자 허용목록·크기·저장 경로 확인","regex":"getOriginalFilename\\s*\\(","severity":"info","skipComments":true},
+	{"flags":[],"group":"a11y","id":"a11y.imgAlt","langs":["jsp","jspf","tag","html","htm"],"max":null,"message":"적절한 대체 텍스트 — img 에 alt 가 없다(장식이면 alt=\"\")","regex":"<img\\b(?!.*\\balt\\s*=)","severity":"warn","skipComments":true},
+	{"flags":[],"group":"a11y","id":"a11y.inputLabel","langs":["jsp","jspf","tag","html","htm"],"max":null,"message":"레이블 제공 — 입력에 title·label 연결이 없다","regex":"<input\\b(?!.*\\btype\\s*=\\s*[\"'](?:hidden|button|submit|image|reset)[\"'])(?!.*\\b(?:title|aria-label|aria-labelledby|id)\\s*=)","severity":"info","skipComments":true},
+	{"flags":[],"group":"a11y","id":"a11y.selectLabel","langs":["jsp","jspf","tag","html","htm"],"max":null,"message":"레이블 제공 — 선택·여러 줄 입력에 title·label 연결이 없다","regex":"<(?:select|textarea)\\b(?!.*\\b(?:title|aria-label|aria-labelledby|id)\\s*=)","severity":"info","skipComments":true},
+	{"flags":[],"group":"a11y","id":"a11y.iframeTitle","langs":["jsp","jspf","tag","html","htm"],"max":null,"message":"프레임 제목 제공 — iframe 에 title 이 없다","regex":"<iframe\\b(?!.*\\btitle\\s*=)","severity":"warn","skipComments":true},
+	{"flags":[],"group":"a11y","id":"a11y.htmlLang","langs":["jsp","jspf","tag","html","htm"],"max":null,"message":"기본 언어 표시 — html 에 lang 이 없다","regex":"<html\\b(?!.*\\blang\\s*=)","severity":"warn","skipComments":true},
+	{"flags":["i"],"group":"a11y","id":"a11y.deprecatedTag","langs":["jsp","jspf","tag","html","htm"],"max":null,"message":"웹 표준 — 폐기된 태그(CSS 로)","regex":"<(?:font|center|marquee|blink|big|strike|tt)\\b","severity":"info","skipComments":true},
+	{"flags":[],"group":"a11y","id":"a11y.mouseOnly","langs":["jsp","jspf","tag","html","htm"],"max":null,"message":"키보드 사용 보장 — 클릭만 받는 요소(키 이벤트·tabindex 없음)","regex":"<(?:div|span|td|tr|li|img)\\b(?=[^>]*\\bonclick\\s*=)(?![^>]*\\b(?:onkey\\w+|tabindex|role)\\s*=)","severity":"info","skipComments":true},
+	{"flags":[],"group":"a11y","id":"a11y.nonStandardDom","langs":["jsp","jspf","tag","html","htm","js"],"max":null,"message":"웹 표준 — 비표준 DOM(getElementById 로)","regex":"\\bdocument\\.(?:all|layers)\\b","severity":"warn","skipComments":true},
+	{"flags":["i"],"group":"a11y","id":"a11y.activeX","langs":["jsp","jspf","tag","html","htm","js"],"max":null,"message":"웹 표준 — ActiveX(플러그인 없이)","regex":"\\bActiveXObject\\b|\\bclassid\\s*=\\s*[\"']clsid:","severity":"warn","skipComments":true}
 ];
-var GROUPS = [['common', 'ㄱ 공통 잔재'], ['jsp', 'ㄹ JSP'], ['tsx', 'ㅁ TSX·JS'], ['security', 'ㅇ 보안약점']];
+var GROUPS = [['common', 'ㄱ 공통 잔재'], ['jsp', 'ㄹ JSP'], ['tsx', 'ㅁ TSX·JS'], ['security', 'ㅇ 보안약점'], ['a11y', 'ㅈ 웹 접근성·표준']];
 var STORE = 'codeCheck.rules';
 var state = { groups: {}, rules: {} };
 var found = [];
