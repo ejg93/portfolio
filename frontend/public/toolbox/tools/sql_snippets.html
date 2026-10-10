@@ -192,7 +192,7 @@ var SNIPPETS = {
           key: 'idx_usage', label: '인덱스 사용 현황', desc: '안 쓰이는 인덱스 확인',
           params: [],
           query: function(p) {
-            return "SELECT TABLE_NAME\n     , INDEX_NAME\n     , MONITORING\n     , USED\n     , START_MONITORING\n     , END_MONITORING\nFROM   V$OBJECT_USAGE\nORDER BY TABLE_NAME, INDEX_NAME;";
+            return "-- Oracle 12c 이상 (V$OBJECT_USAGE는 12c부터 폐기 예고, 23ai·26ai에 없다)\nSELECT TABLE_NAME\n     , INDEX_NAME\n     , MONITORING\n     , USED\n     , START_MONITORING\n     , END_MONITORING\nFROM   USER_OBJECT_USAGE\nORDER BY TABLE_NAME, INDEX_NAME;\n\n-- Oracle 11g 이하 (USER_OBJECT_USAGE가 없다)\nSELECT TABLE_NAME\n     , INDEX_NAME\n     , MONITORING\n     , USED\n     , START_MONITORING\n     , END_MONITORING\nFROM   V$OBJECT_USAGE\nORDER BY TABLE_NAME, INDEX_NAME;";
           }
         },
       ]
@@ -293,7 +293,10 @@ var SNIPPETS = {
             return "-- 전제: Oracle 10g 이상. DBMS_XPLAN은 Tibero 참조안내서에 없다 — Tibero면 맨 아래 대안 사용\n"
                  + "-- 권한: V$SQL_PLAN_STATISTICS_ALL 조회 권한 필요. 없으면 ORA-00942\n"
                  + "-- 주의: 계측 오버헤드가 있다. 진단할 때만 켜고 운영 쿼리에 상시로 두지 않는다\n\n"
-                 + "-- 1. 계측 켜기\nALTER SESSION SET STATISTICS_LEVEL = ALL;\n\n"
+                 + "-- 1. 계측 켜기 — SQL*Plus면 SERVEROUTPUT도 끈다\n"
+                 + "--    켜져 있으면 DISPLAY_CURSOR(NULL, NULL)이 마지막 문장(DBMS_OUTPUT 호출)을 잡아\n"
+                 + "--    cannot fetch plan 이 나온다\n"
+                 + "SET SERVEROUTPUT OFF\nALTER SESSION SET STATISTICS_LEVEL = ALL;\n\n"
                  + "-- 2. 대상 쿼리 — 3회 이상 돌리고 2회차 이후만 쓴다\n"
                  + "--    1회차는 하드 파싱과 물리 I/O가 섞여 있어 비교에 못 쓴다\n"
                  + hinted + ";\n\n"
@@ -536,6 +539,7 @@ var SNIPPETS = {
             var sql = p.sp_sql || 'SELECT * FROM TABLE_NAME WHERE COLUMN_NAME = :v_param';
             return "-- 전제: VARIABLE·EXEC·SET은 SQL*Plus 클라이언트 명령이다\n"
                  + "--       Toad·오렌지·SQL Developer는 지원 범위가 다르다. 안 먹으면 그 줄을 빼고 쓴다\n"
+                 + "-- 권한: SET AUTOTRACE는 PLUSTRACE 롤 필요. 없으면 SP2-0618\n"
                  + "-- 용도: 운영과 같은 조건(바인드 변수·전체 fetch)을 툴에서 재현해 시간을 잰다\n\n"
                  + "-- 1. 계측 켜기\nALTER SESSION SET STATISTICS_LEVEL = ALL;\n\n"
                  + "-- 2. 바인드 변수 선언 — 운영과 같은 SQL 텍스트를 만든다\n"
@@ -740,7 +744,7 @@ var SNIPPETS = {
           key: 'tablespace', label: '테이블스페이스 용량', desc: 'InnoDB 데이터 파일 용량 확인 (Oracle 개념과 정확히 일치하지 않음)',
           params: [],
           query: function(p) {
-            return "-- MySQL은 기본이 파일당테이블(innodb_file_per_table=ON)이라 Oracle식 '테이블스페이스' 단위가 없음\n-- 실무 대체: 스키마 전체 데이터+인덱스 용량 합계\nSELECT TABLE_SCHEMA\n     , ROUND(SUM(DATA_LENGTH + INDEX_LENGTH) / 1024 / 1024 / 1024, 2) AS TOTAL_GB\n     , ROUND(SUM(DATA_FREE) / 1024 / 1024, 2)                        AS FREE_MB   -- 삭제 후 회수 안 된 공간(단편화)\nFROM   INFORMATION_SCHEMA.TABLES\nGROUP  BY TABLE_SCHEMA\nORDER  BY TOTAL_GB DESC;\n\n-- 공유 시스템 테이블스페이스(ibdata1) 자체를 쓰는 구성이면 파일 목록으로 확인\nSELECT * FROM INFORMATION_SCHEMA.INNODB_TABLESPACES WHERE NAME = 'innodb_system';";
+            return "-- MySQL은 기본이 파일당테이블(innodb_file_per_table=ON)이라 Oracle식 '테이블스페이스' 단위가 없음\n-- 실무 대체: 스키마 전체 데이터+인덱스 용량 합계\nSELECT TABLE_SCHEMA\n     , ROUND(SUM(DATA_LENGTH + INDEX_LENGTH) / 1024 / 1024 / 1024, 2) AS TOTAL_GB\n     , ROUND(SUM(DATA_FREE) / 1024 / 1024, 2)                        AS FREE_MB   -- 삭제 후 회수 안 된 공간(단편화)\nFROM   INFORMATION_SCHEMA.TABLES\nGROUP  BY TABLE_SCHEMA\nORDER  BY TOTAL_GB DESC;\n\n-- 공유 시스템 테이블스페이스(ibdata1) 파일 용량\n-- MySQL 5.7·8.0\nSELECT FILE_NAME\n     , TOTAL_EXTENTS * EXTENT_SIZE / 1024 / 1024 AS SIZE_MB\n     , DATA_FREE / 1024 / 1024                   AS FREE_MB\nFROM   INFORMATION_SCHEMA.FILES\nWHERE  TABLESPACE_NAME = 'innodb_system';\n\n-- MariaDB (INFORMATION_SCHEMA.FILES가 비어 있다)\nSELECT NAME, FILE_SIZE / 1024 / 1024 AS SIZE_MB\nFROM   INFORMATION_SCHEMA.INNODB_SYS_TABLESPACES\nWHERE  NAME = 'innodb_system';";
           }
         },
         {
@@ -827,7 +831,7 @@ var SNIPPETS = {
           key: 'slow_sql', label: '느린 SQL 찾기', desc: 'performance_schema 기반',
           params: [],
           query: function(p) {
-            return "SELECT DIGEST_TEXT                              AS query\n     , COUNT_STAR                                AS calls\n     , ROUND(AVG_TIMER_WAIT / 1000000000000, 4)  AS avg_sec\n     , ROUND(SUM_TIMER_WAIT / 1000000000000, 4)  AS total_sec\n     , SUM_ROWS_EXAMINED                         AS total_rows_examined\nFROM   performance_schema.events_statements_summary_by_digest\nWHERE  COUNT_STAR > 0\nORDER BY AVG_TIMER_WAIT DESC\nLIMIT 20;";
+            return "SELECT DIGEST_TEXT                              AS query\n     , COUNT_STAR                                AS calls\n     , ROUND(AVG_TIMER_WAIT / 1000000000000, 4)  AS avg_sec\n     , ROUND(SUM_TIMER_WAIT / 1000000000000, 4)  AS total_sec\n     , SUM_ROWS_EXAMINED                         AS total_rows_examined\nFROM   performance_schema.events_statements_summary_by_digest\nWHERE  COUNT_STAR > 0\nORDER BY AVG_TIMER_WAIT DESC\nLIMIT 20;\n-- performance_schema가 꺼져있으면 0건만 나옴 — MariaDB는 기본 OFF\n-- SHOW VARIABLES LIKE 'performance_schema'; 로 확인하고, my.cnf에 performance_schema=ON 을 넣고 재기동";
           }
         },
         {
@@ -1131,7 +1135,7 @@ var SNIPPETS = {
           key: 'slow_sql', label: '느린 SQL 찾기', desc: 'pg_stat_statements 기반',
           params: [],
           query: function(p) {
-            return "SELECT query\n     , calls\n     , ROUND(total_exec_time::numeric, 2)              AS total_ms\n     , ROUND((total_exec_time / calls)::numeric, 2)    AS avg_ms\n     , ROUND(rows / calls::numeric, 2)                 AS avg_rows\nFROM   pg_stat_statements\nWHERE  calls > 0\nORDER BY avg_ms DESC\nLIMIT 20;";
+            return "-- 전제: pg_stat_statements 확장 필요. 없으면 relation does not exist\n--   1) postgresql.conf의 shared_preload_libraries에 pg_stat_statements 추가 후 재기동\n--   2) CREATE EXTENSION pg_stat_statements;\n\nSELECT query\n     , calls\n     , ROUND(total_exec_time::numeric, 2)              AS total_ms\n     , ROUND((total_exec_time / calls)::numeric, 2)    AS avg_ms\n     , ROUND(rows / calls::numeric, 2)                 AS avg_rows\nFROM   pg_stat_statements\nWHERE  calls > 0\nORDER BY avg_ms DESC\nLIMIT 20;";
           }
         },
         {
