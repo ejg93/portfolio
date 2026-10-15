@@ -38,7 +38,7 @@ lib/github.ts ProjectShop 저장소 숫자·최근 커밋을 GitHub API 로 받�
 
 `tsconfig.json` 의 include 도 빌드가 손댄다 — 새 distDir 이 생기면 한 줄 늘어난다. 그건 커밋한다.
 
-`next-env.d.ts` 는 다르다. **마지막으로 돌린 빌드의 distDir 을 가리켜서** verify 빌드와 e2e 빌드 사이를 계속 오간다. diff 에 뜨면 되돌린다 — 커밋하면 빌드할 때마다 뒤집힌다.
+`next-env.d.ts` 는 git 에 없다. 빌드·dev·`next typegen` 이 마지막 distDir 을 가리키게 다시 쓰는 파일이라 커밋하면 빌드마다 뒤집힌다(2026-10-15 에 뺐다). `npm run typecheck` 가 `next typegen` 으로 먼저 만들므로 새로 받은 트리에서도 tsc 가 돈다.
 
 ## 번들러
 
