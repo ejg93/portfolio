@@ -1,10 +1,10 @@
 package com.portfolio.service;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ArrayNode;
+import tools.jackson.databind.node.ObjectNode;
 import com.portfolio.error.UpstreamException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -70,24 +70,24 @@ public class YoutubeService {
             JsonNode res = get(url);
 
             if (totalCount == 0) {
-                totalCount = res.path("pageInfo").path("totalResults").asInt();
+                totalCount = res.path("pageInfo").path("totalResults").asInt(0);
             }
 
             for (JsonNode item : res.path("items")) {
                 JsonNode snippet = item.path("snippet").path("topLevelComment").path("snippet");
                 ObjectNode c = mapper.createObjectNode();
-                c.put("id",          item.path("id").asText());
-                c.put("author",      snippet.path("authorDisplayName").asText());
-                c.put("text",        snippet.path("textDisplay").asText());
-                c.put("likeCount",   snippet.path("likeCount").asInt());
-                c.put("publishedAt", snippet.path("publishedAt").asText());
-                c.put("updatedAt",   snippet.path("updatedAt").asText());
-                c.put("replyCount",  item.path("snippet").path("totalReplyCount").asInt());
+                c.put("id",          item.path("id").asString(""));
+                c.put("author",      snippet.path("authorDisplayName").asString(""));
+                c.put("text",        snippet.path("textDisplay").asString(""));
+                c.put("likeCount",   snippet.path("likeCount").asInt(0));
+                c.put("publishedAt", snippet.path("publishedAt").asString(""));
+                c.put("updatedAt",   snippet.path("updatedAt").asString(""));
+                c.put("replyCount",  item.path("snippet").path("totalReplyCount").asInt(0));
                 comments.add(c);
             }
 
             pageToken = res.path("nextPageToken").isMissingNode()
-                    ? null : res.path("nextPageToken").asText();
+                    ? null : res.path("nextPageToken").asString("");
             pages++;
 
             // 같은 토큰을 다시 주면 다음 장이 없다는 뜻이다. 그대로 따라가면 같은 요청을 끝없이 반복한다
@@ -127,11 +127,11 @@ public class YoutubeService {
         for (JsonNode item : res.path("items")) {
             JsonNode snippet = item.path("snippet");
             ObjectNode r = mapper.createObjectNode();
-            r.put("id",          item.path("id").asText());
-            r.put("author",      snippet.path("authorDisplayName").asText());
-            r.put("text",        snippet.path("textDisplay").asText());
-            r.put("likeCount",   snippet.path("likeCount").asInt());
-            r.put("publishedAt", snippet.path("publishedAt").asText());
+            r.put("id",          item.path("id").asString(""));
+            r.put("author",      snippet.path("authorDisplayName").asString(""));
+            r.put("text",        snippet.path("textDisplay").asString(""));
+            r.put("likeCount",   snippet.path("likeCount").asInt(0));
+            r.put("publishedAt", snippet.path("publishedAt").asString(""));
             replies.add(r);
         }
 
@@ -152,7 +152,7 @@ public class YoutubeService {
             JsonNode res = get(url);
             JsonNode items = res.path("items");
             if (items.size() == 0) return "";
-            return items.get(0).path("snippet").path("title").asText("");
+            return items.get(0).path("snippet").path("title").asString("");
         } catch (Exception e) {
             log.warn("영상 제목 조회 실패: {}", e.getMessage());
             return "";
@@ -177,7 +177,7 @@ public class YoutubeService {
         }
         try {
             return mapper.readTree(res.body());
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             // 점검 안내 HTML 이 200 으로 오는 경우다. 그대로 두면 파서 예외가 500 처럼 보인다
             log.warn("YouTube API 200 인데 본문이 JSON 이 아니다 - {}자", res.body().length());
             throw new UpstreamException(HttpStatus.BAD_GATEWAY, "UPSTREAM_ERROR",
@@ -192,8 +192,8 @@ public class YoutubeService {
         String upstreamMessage = "";
         try {
             JsonNode err = mapper.readTree(body).path("error");
-            reason = err.path("errors").path(0).path("reason").asText("");
-            upstreamMessage = err.path("message").asText("");
+            reason = err.path("errors").path(0).path("reason").asString("");
+            upstreamMessage = err.path("message").asString("");
         } catch (Exception ignored) {
             // 본문이 JSON 이 아니면 상태코드만 보고 가른다
         }

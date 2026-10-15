@@ -1,7 +1,7 @@
 package com.portfolio.service;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.node.ObjectNode;
 import com.portfolio.error.UpstreamException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -61,7 +61,7 @@ class JobServiceTest {
 
         ObjectNode out = service.fetchJobs();
 
-        assertThat(out.path("error").asText()).isEqualTo("SARAMIN_ACCESS_KEY not set");
+        assertThat(out.path("error").asString()).isEqualTo("SARAMIN_ACCESS_KEY not set");
         assertThat(out.path("jobs")).isEmpty();
         // 키가 없는데 요청을 보내면 그쪽 로그만 더럽힌다
         assertThat(stub.requests()).isEmpty();
@@ -92,7 +92,7 @@ class JobServiceTest {
 
         JsonNode job = service.fetchJobs().path("jobs").get(0);
 
-        assertThat(job.path("location").asText()).isEqualTo("서울 강남구");
+        assertThat(job.path("location").asString()).isEqualTo("서울 강남구");
     }
 
     @Test

@@ -1,6 +1,6 @@
 package com.portfolio.service;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import com.portfolio.dto.BattleRequest;
 import com.portfolio.dto.BattleResponse;
 import com.portfolio.error.UpstreamException;
@@ -88,11 +88,11 @@ class BattleServiceTest {
 
         var sent = mapper.readTree(sentBody.get());
         assertThat(sent.path("messages")).hasSize(2);
-        assertThat(sent.path("messages").get(0).path("role").asText()).isEqualTo("assistant");
-        assertThat(sent.path("messages").get(0).path("content").asText()).isEqualTo("지난 말");
+        assertThat(sent.path("messages").get(0).path("role").asString()).isEqualTo("assistant");
+        assertThat(sent.path("messages").get(0).path("content").asString()).isEqualTo("지난 말");
         // 이번 메시지는 맨 뒤에 user 로 붙는다
-        assertThat(sent.path("messages").get(1).path("role").asText()).isEqualTo("user");
-        assertThat(sent.path("messages").get(1).path("content").asText()).isEqualTo("이번 말");
+        assertThat(sent.path("messages").get(1).path("role").asString()).isEqualTo("user");
+        assertThat(sent.path("messages").get(1).path("content").asString()).isEqualTo("이번 말");
     }
 
     @Test
@@ -101,16 +101,16 @@ class BattleServiceTest {
         answer(200, OK_BODY);
 
         service.chat(request("empathy", "한 마디"));
-        String empathy = mapper.readTree(sentBody.get()).path("system").asText();
+        String empathy = mapper.readTree(sentBody.get()).path("system").asString();
 
         service.chat(request("logic", "한 마디"));
-        String logic = mapper.readTree(sentBody.get()).path("system").asText();
+        String logic = mapper.readTree(sentBody.get()).path("system").asString();
 
         assertThat(empathy).contains("창의적이고 감성적인");
         assertThat(logic).contains("논리적이고 냉철한");
         // 성향을 안 주면 논리형으로 간다
         service.chat(request(null, "한 마디"));
-        assertThat(mapper.readTree(sentBody.get()).path("system").asText()).isEqualTo(logic);
+        assertThat(mapper.readTree(sentBody.get()).path("system").asString()).isEqualTo(logic);
     }
 
     @Test
