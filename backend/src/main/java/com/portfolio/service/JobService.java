@@ -1,10 +1,10 @@
 package com.portfolio.service;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ArrayNode;
+import tools.jackson.databind.node.ObjectNode;
 import com.portfolio.error.UpstreamException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -83,7 +83,7 @@ public class JobService {
         JsonNode data;
         try {
             data = mapper.readTree(res.body());
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             // 점검 안내 HTML 이 200 으로 오는 경우다. 200 이 아닐 때와 같은 자리로 모은다
             log.warn("Saramin API 200 인데 본문이 JSON 이 아니다 - {}자", res.body().length());
             throw new UpstreamException(HttpStatus.BAD_GATEWAY, "UPSTREAM_ERROR",
@@ -100,11 +100,11 @@ public class JobService {
         // 반복공고 감지: 동일 회사 공고 수 카운트
         Map<String, Integer> companyCount = new HashMap<>();
         for (ObjectNode job : jobList) {
-            String co = job.path("company").asText();
+            String co = job.path("company").asString("");
             companyCount.merge(co, 1, Integer::sum);
         }
         for (ObjectNode job : jobList) {
-            job.put("repeatCount", companyCount.getOrDefault(job.path("company").asText(), 1));
+            job.put("repeatCount", companyCount.getOrDefault(job.path("company").asString(""), 1));
         }
 
         ArrayNode jobs = mapper.createArrayNode();
@@ -116,25 +116,25 @@ public class JobService {
     }
 
     private ObjectNode buildJob(JsonNode raw) {
-        String locationRaw = raw.path("position").path("location").path("name").asText("");
+        String locationRaw = raw.path("position").path("location").path("name").asString("");
         String location    = locationRaw.replace("&gt;", " ").replaceAll("\\s+", " ").trim();
 
-        String salaryName = raw.path("salary").path("name").asText("협의");
+        String salaryName = raw.path("salary").path("name").asString("협의");
         int    salaryMin  = parseSalaryMin(salaryName);
         int    expMin     = raw.path("position").path("experience-level").path("min").asInt(0);
 
         ObjectNode job = mapper.createObjectNode();
-        job.put("id",        raw.path("id").asText(""));
-        job.put("url",       raw.path("url").asText(""));
-        job.put("company",   raw.path("company").path("detail").path("name").asText(""));
-        job.put("title",     raw.path("position").path("title").asText(""));
+        job.put("id",        raw.path("id").asString(""));
+        job.put("url",       raw.path("url").asString(""));
+        job.put("company",   raw.path("company").path("detail").path("name").asString(""));
+        job.put("title",     raw.path("position").path("title").asString(""));
         job.put("location",  location);
         job.put("salary",    salaryName);
         job.put("salaryMin", salaryMin);
         job.put("expMin",    expMin);
-        job.put("expName",   raw.path("position").path("experience-level").path("name").asText("경력무관"));
-        job.put("education", raw.path("position").path("required-education-level").path("name").asText(""));
-        job.put("jobType",   raw.path("position").path("job-type").path("name").asText(""));
+        job.put("expName",   raw.path("position").path("experience-level").path("name").asString("경력무관"));
+        job.put("education", raw.path("position").path("required-education-level").path("name").asString(""));
+        job.put("jobType",   raw.path("position").path("job-type").path("name").asString(""));
 
         if (!location.isBlank()) {
             try {

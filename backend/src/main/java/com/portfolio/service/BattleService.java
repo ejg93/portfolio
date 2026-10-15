@@ -1,10 +1,10 @@
 package com.portfolio.service;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ArrayNode;
+import tools.jackson.databind.node.ObjectNode;
 import com.portfolio.dto.BattleRequest;
 import com.portfolio.error.UpstreamException;
 import com.portfolio.dto.BattleResponse;
@@ -114,7 +114,7 @@ public class BattleService {
         JsonNode result;
         try {
             result = mapper.readTree(response.body());
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             log.error("Claude API 200 인데 본문이 JSON 이 아니다 - {}자", response.body().length());
             throw new UpstreamException(HttpStatus.BAD_GATEWAY, "UPSTREAM_ERROR",
                     "모델 API 응답이 정상이 아니다");
@@ -128,8 +128,8 @@ public class BattleService {
                     "모델 API 응답이 정상이 아니다");
         }
 
-        String reply = first.path("text").asText();
-        int tokens = result.path("usage").path("output_tokens").asInt();
+        String reply = first.path("text").asString("");
+        int tokens = result.path("usage").path("output_tokens").asInt(0);
 
         log.debug("Claude API 응답 - tokens: {}, reply: {}", tokens, reply);
         return new BattleResponse(reply, tokens);

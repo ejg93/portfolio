@@ -1,6 +1,6 @@
-# backend — Spring Boot 3 API
+# backend — Spring Boot 4 API
 
-Java 17 + Spring Boot 3.2.5. 프론트가 호출하는 REST API를 제공하고, Railway가 이 폴더를 루트로 배포한다. DB는 없다.
+Java 17 + Spring Boot 4.1.1. 프론트가 호출하는 REST API를 제공하고, Railway가 이 폴더를 루트로 배포한다. DB는 없다.
 
 ## 구조
 

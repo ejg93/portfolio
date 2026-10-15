@@ -1,6 +1,6 @@
 package com.portfolio.service;
 
-import com.fasterxml.jackson.databind.node.ObjectNode;
+import tools.jackson.databind.node.ObjectNode;
 import com.portfolio.error.UpstreamException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -68,13 +68,13 @@ class YoutubeServiceTest {
 
         ObjectNode result = service.fetchComments("abc123");
 
-        assertThat(result.path("videoTitle").asText()).isEqualTo("테스트 영상");
+        assertThat(result.path("videoTitle").asString()).isEqualTo("테스트 영상");
         // total 은 첫 페이지 값을 쥔다. 두 번째 페이지가 덮어쓰면 안 된다
         assertThat(result.path("total").asInt()).isEqualTo(42);
         assertThat(result.path("comments")).hasSize(2);
-        assertThat(result.path("comments").get(0).path("author").asText()).isEqualTo("하나");
+        assertThat(result.path("comments").get(0).path("author").asString()).isEqualTo("하나");
         assertThat(result.path("comments").get(0).path("replyCount").asInt()).isEqualTo(2);
-        assertThat(result.path("comments").get(1).path("text").asText()).isEqualTo("세 번째");
+        assertThat(result.path("comments").get(1).path("text").asString()).isEqualTo("세 번째");
 
         // 페이지 토큰을 달고 한 번 더 불렀는지
         assertThat(stub.requests()).anyMatch(r -> r.contains("/commentThreads") && r.contains("pageToken=PAGE2"));
@@ -161,7 +161,7 @@ class YoutubeServiceTest {
         ObjectNode result = service.fetchComments("abc");
 
         // 제목은 곁가지다. 그것 때문에 본 목록이 통째로 실패하면 안 된다
-        assertThat(result.path("videoTitle").asText()).isEmpty();
+        assertThat(result.path("videoTitle").asString()).isEmpty();
         assertThat(result.path("comments")).hasSize(1);
     }
 
