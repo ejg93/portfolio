@@ -1193,6 +1193,18 @@ function genFromCreate(){
       ' — 값을 넣어 두었으니 필요하면 해당 컬럼을 지울 것'+
       (db==='mssql'?' (SQL Server는 SET IDENTITY_INSERT ON 필요)':''));
   }
+  if(!merge){
+    parsed.cols.forEach(function(c){
+      var t=c.type, sz=parseInt(c.size)||0, vals=0;
+      if(c.allowed&&c.allowed.length) vals=c.allowed.length;
+      else if(/^(CHAR|NCHAR)$/i.test(t)&&sz===1&&/(_YN|_FLAG|_FL)$/i.test(c.name)) vals=2;
+      else if(/^(ENUM|SET)$/i.test(t)&&c.size) vals=c.size.split(',').map(function(v){ return v.trim(); }).filter(Boolean).length;
+      else if(/^(BOOL|BOOLEAN|BIT)$/i.test(t)||(/^TINYINT$/i.test(t)&&sz===1)) vals=2;
+      if((c.pk||c.uq)&&vals&&count>vals){
+        notes.push('-- ⚠ '+c.name.toUpperCase()+': 허용 값이 '+vals+'개인 키 컬럼이라 '+count+'행이면 값이 겹친다 — 행 수를 '+vals+' 이하로 두거나 값을 손으로 바꿀 것');
+      }
+    });
+  }
   var head=notes.length?notes.join('\n')+'\n\n':'';
 
   if(merge){ document.getElementById('dummy_out').value=head+buildUpsert(db,parsed); return; }

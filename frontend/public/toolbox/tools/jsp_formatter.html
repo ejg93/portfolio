@@ -298,12 +298,19 @@ function formatJsp(src, opts) {
 			if (w < min) min = w;
 		}
 		if (min === Infinity) min = 0;
+		var step = Infinity;
+		for (var k = 1; k < ls.length; k++) {
+			if (!ls[k].trim()) continue;
+			var wk = ls[k].match(/^[ \t]*/)[0].replace(/\t/g, tabSp).length - min;
+			if (wk >= 2 && wk < step) step = wk;
+		}
+		if (step === Infinity) step = unitW;
 		var res = [pad(baseDepth) + ls[0].replace(/^[ \t]*/, "")];
 		for (var j = 1; j < ls.length; j++) {
 			if (!ls[j].trim()) { res.push(""); continue; }
 			var w2 = ls[j].match(/^[ \t]*/)[0].replace(/\t/g, tabSp).length;
 			var extra = Math.max(0, w2 - min);
-			res.push(pad(contDepth) + new Array(Math.floor(extra / unitW) + 1).join(indentStr) + ls[j].trim());
+			res.push(pad(contDepth) + new Array(Math.floor(extra / step) + 1).join(indentStr) + ls[j].trim());
 		}
 		return res.join("\n");
 	}
@@ -390,8 +397,7 @@ var INLINE_TAGS = {
 };
 
 function tokenize(src) {
-	var re = /(<%--[\s\S]*?--%>)|(<!--[\s\S]*?-->)|(<%[\s\S]*?%>)|(<(script|style|pre|textarea)\b[^>]*>[\s\S]*?<\/\5\s*>)|(<\/?[A-Za-z][A-Za-z0-9:._-]*(?:=\s*"[^"]*"|=\s*'[^']*'|=(?!\s*(?:"[^"]*"|'[^']*'))|[^>=])*>)/gi;
-	var toks = [], pos = 0, line = 1, pendWs = false, m;
+	var toks = [], pos = 0, line = 1, pendWs = false, i = 0, n = src.length;
 	function adv(s) { for (var k = 0; k < s.length; k++) if (s.charCodeAt(k) === 10) line++; }
 	function push(kind, raw, key, name) {
 		toks.push({ kind: kind, raw: raw, key: key, name: name || "", line: line, ws: pendWs });
@@ -410,17 +416,40 @@ function tokenize(src) {
 		if (trail) pendWs = true;
 		adv(trail);
 	}
-	while ((m = re.exec(src)) !== null) {
-		gap(src.slice(pos, m.index));
-		var raw = m[0], kind, name = "";
-		if (m[1] || m[2]) kind = "comment";
-		else if (m[3]) { kind = "jsp"; name = /^<%=/.test(raw) ? "=" : ""; }
-		else if (m[4]) { kind = "block"; name = m[5].toLowerCase(); }
-		else { kind = "tag"; name = (raw.match(/^<\/?([A-Za-z][A-Za-z0-9:._-]*)/) || ["", ""])[1].toLowerCase(); }
+	function take(kind, raw, name) {
+		gap(src.slice(pos, i));
 		var key = kind === "tag" ? tagKey(raw) : raw.split(/\r?\n/).map(function (x) { return x.trim(); }).join("\n");
 		push(kind, raw, key, name);
 		adv(raw);
-		pos = m.index + raw.length;
+		pos = i = i + raw.length;
+	}
+	while (i < n) {
+		if (src.charAt(i) !== "<") { i++; continue; }
+		var head = src.substr(i, 12), e;
+		if (/^<%--/.test(head) || /^<!--/.test(head)) {
+			e = head.charAt(1) === "%" ? jspEnd(src, i) : src.indexOf("-->", i + 4);
+			if (e < 0) { i++; continue; }
+			if (head.charAt(1) === "!") e += 3;
+			take("comment", src.slice(i, e), "");
+			continue;
+		}
+		if (head.charAt(1) === "%") {
+			e = jspEnd(src, i);
+			if (e < 0) { i++; continue; }
+			take("jsp", src.slice(i, e), /^<%=/.test(head) ? "=" : "");
+			continue;
+		}
+		if (!/^<\/?[A-Za-z]/.test(head)) { i++; continue; }
+		e = scanTag(src, i);
+		if (e < 0) { i++; continue; }
+		var bm = /^<(script|style|pre|textarea)\b/i.exec(head);
+		if (bm) {
+			var cre = new RegExp("<\\/" + bm[1] + "\\s*>", "ig");
+			cre.lastIndex = e;
+			var cm = cre.exec(src);
+			if (cm) { take("block", src.slice(i, cm.index + cm[0].length), bm[1].toLowerCase()); continue; }
+		}
+		take("tag", src.slice(i, e), (src.slice(i, e).match(/^<\/?([A-Za-z][A-Za-z0-9:._-]*)/) || ["", ""])[1].toLowerCase());
 	}
 	gap(src.slice(pos));
 	return toks;
