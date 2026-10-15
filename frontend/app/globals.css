@@ -69,6 +69,7 @@ html[data-sidebar-ready="1"] .sidebar-push > div:first-child {
 }
 
 .mono { font-family: var(--font-mono), 'IBM Plex Mono', monospace; }
+.tap { display: inline-block; min-height: 24px; line-height: 24px; }
 .display { font-family: var(--font-display), 'Bebas Neue', sans-serif; }
 
 /* 제목 크기. 인라인이 아니라 클래스에 두는 이유 — 폰에서 미디어쿼리로 줄여야 한다 */

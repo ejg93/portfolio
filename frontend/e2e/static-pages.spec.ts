@@ -30,7 +30,7 @@ for (const path of PAGES) {
     })
     page.on('pageerror', (e) => errors.push('예외: ' + e.message.slice(0, 160)))
     page.on('response', (r) => {
-      if (r.status() >= 400 && !r.url().includes('favicon') && !isDeployNoise(r.url())) failed.push(`${r.status()} ${r.url().slice(0, 80)}`)
+      if (r.status() >= 400 && !isDeployNoise(r.url())) failed.push(`${r.status()} ${r.url().slice(0, 80)}`)
     })
 
     const res = await page.goto(path, { waitUntil: 'load' })

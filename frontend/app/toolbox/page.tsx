@@ -157,7 +157,7 @@ export default function Toolbox() {
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                       {SAMPLES.map(s => (
                         <a key={s.name} href={`${SAMPLE_DIR}/${encodeURI(s.name)}`} target="_blank" rel="noopener noreferrer"
-                          className="mono" style={linkStyle}>
+                          className="mono tap" style={linkStyle}>
                           {s.slot} · {s.name} →
                         </a>
                       ))}
