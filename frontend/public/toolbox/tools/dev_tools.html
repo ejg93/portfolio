@@ -998,7 +998,7 @@ function parseCreate(sql){
     else if(sql[i]===')'){ depth--; if(depth===0){ close=i; break; } }
   }
   var inner=sql.substring(open+1, close<0?sql.length:close);
-  var cols=[], pkCols=[], uqCols=[], fkCols=[], warns=[];
+  var cols=[], pkCols=[], uqCols=[], fkCols=[], warns=[], uqGroups=[];
   var colList=function(s){ return s.split(',').map(function(x){ return x.replace(/["`[\]]/g,'').replace(/\s+(ASC|DESC)$/i,'').trim().toLowerCase(); }).filter(Boolean); };
   var splitVals=function(s){
     var out=[], cur='', q=false;
@@ -1026,7 +1026,7 @@ function parseCreate(sql){
     var tp=part.match(new RegExp('^'+CN+'PRIMARY\\s+KEY'+CL+'\\s*\\(([^)]+)\\)','i'));
     if(tp){ pkCols=pkCols.concat(colList(tp[1])); return; }
     var tu=part.match(new RegExp('^'+CN+'UNIQUE(?:\\s+(?:KEY|INDEX))?'+CL+'\\s*(?:[\\w."`[\\]]+)?\\s*\\(([^)]+)\\)','i'));
-    if(tu){ uqCols=uqCols.concat(colList(tu[1])); return; }
+    if(tu){ uqCols=uqCols.concat(colList(tu[1])); uqGroups.push(colList(tu[1])); return; }
     var tf=part.match(new RegExp('^'+CN+'FOREIGN\\s+KEY\\s*\\(([^)]+)\\)\\s*REFERENCES\\s+([\\w."`[\\]]+)','i'));
     if(tf){ fkCols=fkCols.concat(colList(tf[1])); warns.push('FK: '+colList(tf[1]).join(', ')+' → '+tf[2].replace(/["`[\]]/g,'')); return; }
     if(/^(CONSTRAINT|CHECK|PRIMARY\s+KEY|FOREIGN\s+KEY|UNIQUE|KEY\s|INDEX\s|FULLTEXT|SPATIAL|PERIOD\s)/i.test(part)){
@@ -1052,7 +1052,7 @@ function parseCreate(sql){
            || /^(SERIAL|BIGSERIAL|SMALLSERIAL)$/i.test(ctype)
     };
     if(col.pk) pkCols.push(name);
-    if(col.uq) uqCols.push(name);
+    if(col.uq){ uqCols.push(name); uqGroups.push([name]); }
     var fr=part.match(/REFERENCES\s+([\w."`[\]]+)/i);
     if(fr){ fkCols.push(name); warns.push('FK: '+name+' → '+fr[1].replace(/["`[\]]/g,'')); }
     cols.push(col);
@@ -1067,7 +1067,7 @@ function parseCreate(sql){
     if(uqCols.indexOf(c.name)>=0) c.uq=true;
     if(fkCols.indexOf(c.name)>=0) c.fk=true;
   });
-  return {tableName:tableName,cols:cols,pkCols:pkCols,warns:warns};
+  return {tableName:tableName,cols:cols,pkCols:pkCols,warns:warns,keyGroups:(pkCols.length?[pkCols]:[]).concat(uqGroups)};
 }
 function rInt(min,max){ return Math.floor(Math.random()*(max-min+1))+min; }
 function rRecentDateTime(years){
@@ -1194,15 +1194,25 @@ function genFromCreate(){
       (db==='mssql'?' (SQL Server는 SET IDENTITY_INSERT ON 필요)':''));
   }
   if(!merge){
-    parsed.cols.forEach(function(c){
-      var t=c.type, sz=parseInt(c.size)||0, vals=0;
-      if(c.allowed&&c.allowed.length) vals=c.allowed.length;
-      else if(/^(CHAR|NCHAR)$/i.test(t)&&sz===1&&/(_YN|_FLAG|_FL)$/i.test(c.name)) vals=2;
-      else if(/^(ENUM|SET)$/i.test(t)&&c.size) vals=c.size.split(',').map(function(v){ return v.trim(); }).filter(Boolean).length;
-      else if(/^(BOOL|BOOLEAN|BIT)$/i.test(t)||(/^TINYINT$/i.test(t)&&sz===1)) vals=2;
-      if((c.pk||c.uq)&&vals&&count>vals){
-        notes.push('-- ⚠ '+c.name.toUpperCase()+': 허용 값이 '+vals+'개인 키 컬럼이라 '+count+'행이면 값이 겹친다 — 행 수를 '+vals+' 이하로 두거나 값을 손으로 바꿀 것');
-      }
+    var narrowVals=function(c){
+      var t=c.type, sz=parseInt(c.size)||0;
+      if(c.allowed&&c.allowed.length) return c.allowed.length;
+      if(/^(CHAR|NCHAR)$/i.test(t)&&sz===1&&/(_YN|_FLAG|_FL)$/i.test(c.name)) return 2;
+      if(/^(ENUM|SET)$/i.test(t)&&c.size) return c.size.split(',').map(function(v){ return v.trim(); }).filter(Boolean).length;
+      if(/^(BOOL|BOOLEAN|BIT)$/i.test(t)||(/^TINYINT$/i.test(t)&&sz===1)) return 2;
+      return 0;
+    };
+    var gcd=function(a,b){ return b?gcd(b,a%b):a; };
+    (parsed.keyGroups||[]).forEach(function(g){
+      var gc=g.map(function(n){ return parsed.cols.filter(function(c){ return c.name===n; })[0]; });
+      if(!gc.length||gc.some(function(c){ return !c; })) return;
+      var vs=gc.map(narrowVals);
+      if(vs.some(function(v){ return !v; })) return;
+      var combos=vs.reduce(function(a,b){ return a/gcd(a,b)*b; });
+      if(count<=combos) return;
+      var label=gc.length===1 ? gc[0].name.toUpperCase()+': 허용 값이 '+combos+'개인 키 컬럼이라'
+                              : '('+gc.map(function(c){ return c.name.toUpperCase(); }).join(', ')+'): 값 조합이 '+combos+'가지인 키라';
+      notes.push('-- ⚠ '+label+' '+count+'행이면 값이 겹친다 — 행 수를 '+combos+' 이하로 두거나 값을 손으로 바꿀 것');
     });
   }
   var head=notes.length?notes.join('\n')+'\n\n':'';

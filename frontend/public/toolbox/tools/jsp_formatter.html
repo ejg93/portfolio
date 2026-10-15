@@ -306,11 +306,22 @@ function formatJsp(src, opts) {
 		}
 		if (step === Infinity) step = unitW;
 		var res = [pad(baseDepth) + ls[0].replace(/^[ \t]*/, "")];
+		var prevW = -1, prevLv = 0, lvs = [], used = {};
 		for (var j = 1; j < ls.length; j++) {
-			if (!ls[j].trim()) { res.push(""); continue; }
+			if (!ls[j].trim()) { lvs.push(-1); continue; }
 			var w2 = ls[j].match(/^[ \t]*/)[0].replace(/\t/g, tabSp).length;
-			var extra = Math.max(0, w2 - min);
-			res.push(pad(contDepth) + new Array(Math.floor(extra / step) + 1).join(indentStr) + ls[j].trim());
+			var lv = prevW >= 0 && Math.abs(w2 - prevW) <= 1 ? prevLv : Math.floor(Math.max(0, w2 - min) / step);
+			lvs.push(lv);
+			used[lv] = 1;
+			prevW = w2;
+			prevLv = lv;
+		}
+		var us = Object.keys(used).map(Number).sort(function (a, b) { return a - b; });
+		var lo = us.length ? us[0] : 0, gap = us.length > 1 ? us[1] - lo - 1 : 0;
+		for (var q = 0; q < lvs.length; q++) {
+			var nl = lvs[q] - lo;
+			if (nl > 0) nl -= gap;
+			res.push(lvs[q] < 0 ? "" : pad(contDepth) + new Array(nl + 1).join(indentStr) + ls[q + 1].trim());
 		}
 		return res.join("\n");
 	}
