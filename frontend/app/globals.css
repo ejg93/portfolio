@@ -1,6 +1,13 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+
+/* v3 preflight 와 같은 화면을 유지한다 (Tailwind 4 업그레이드 가이드의 호환 규칙, 색은 v3 리터럴) */
+@layer base {
+  *, ::after, ::before, ::backdrop, ::file-selector-button { border-color: #e5e7eb; }
+  input::placeholder, textarea::placeholder { color: #9ca3af; }
+  button:not(:disabled), [role="button"]:not(:disabled) { cursor: pointer; }
+  dialog { margin: auto; }
+  code, kbd, samp, pre { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-feature-settings: normal; font-variation-settings: normal; }
+}
 
 /* 웹폰트는 layout.tsx 가 next/font 로 자체 호스팅한다. --font-sans·--font-mono·--font-display 를 거기서 세운다 */
 
