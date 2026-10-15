@@ -3,6 +3,7 @@ node_modules/
 .next-verify/
 .env.local
 *.tsbuildinfo
+next-env.d.ts
 
 # 외부 공식문서 원본 다운로드 (74MB, 462파일 — 저장소에 넣지 않음)
 /public/toolbox/db_docs/
