@@ -283,6 +283,51 @@ function stripComments(text, lang) {
 	}
 }
 
+var BLOCK_OPEN = '/' + '*';
+var BLOCK_CLOSE = '*' + '/';
+var LINE_MARK = '/' + '/';
+
+function commentOnly(t, from, to) {
+	var k = from, e;
+	while (k < to) {
+		if (/\s/.test(t.charAt(k))) { k++; continue; }
+		if (t.substr(k, 2) === BLOCK_OPEN) {
+			e = t.indexOf(BLOCK_CLOSE, k + 2);
+			if (e < 0 || e + 2 > to) return false;
+			k = e + 2;
+			continue;
+		}
+		if (t.substr(k, 2) === LINE_MARK) {
+			e = t.indexOf('\n', k);
+			k = e < 0 || e > to ? to : e;
+			continue;
+		}
+		return false;
+	}
+	return true;
+}
+
+function blankCommentScriptlets(text) {
+	var out = null, i = 0, body, end, k;
+	while ((i = text.indexOf('<%', i)) >= 0) {
+		body = i + 2;
+		if (body < text.length && '@=!-'.indexOf(text.charAt(body)) >= 0) { i = body; continue; }
+		end = text.indexOf('%>', body);
+		if (end < 0) break;
+		if (commentOnly(text, body, end)) {
+			if (out === null) out = text.split('');
+			for (k = i; k < end + 2; k++) if (text.charAt(k) !== '\n') out[k] = ' ';
+		}
+		i = end + 2;
+	}
+	return out === null ? text : out.join('');
+}
+
+function skipped(text, lang) {
+	var t = stripComments(text, lang);
+	return lang === 'jsp' || lang === 'jspf' || lang === 'tag' ? blankCommentScriptlets(t) : t;
+}
+
 function excerpt(line) {
 	var t = line.replace(/^\s+|\s+$/g, '');
 	return t.length > 160 ? t.substring(0, 160) : t;
@@ -298,7 +343,7 @@ function check(text, lang) {
 		var flags = (r.flags || []).join('');
 		var lines = raw;
 		if (r.skipComments) {
-			if (stripped === null) stripped = stripComments(src, lang).split('\n');
+			if (stripped === null) stripped = skipped(src, lang).split('\n');
 			lines = stripped;
 		}
 		if (r.max !== null && r.max !== undefined) {

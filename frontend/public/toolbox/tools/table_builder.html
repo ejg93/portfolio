@@ -893,6 +893,121 @@ function loadTable() {
 	} catch (e) { return false; }
 }
 
+var TB_PASTE_ALIGNS = null;
+
+function tbEsc(s) {
+	return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function tbNormAlign(a) {
+	a = String(a || '').toLowerCase().trim();
+	if (a === 'justify') return 'left';
+	return a === 'left' || a === 'center' || a === 'right' ? a : '';
+}
+
+function tbClassAligns(doc) {
+	var map = {};
+	Array.prototype.forEach.call(doc.querySelectorAll('style'), function (st) {
+		var re = /\.([\w-]+)\s*\{([^}]*)\}/g, m;
+		var css = st.textContent || '';
+		while ((m = re.exec(css))) {
+			var a = /text-align\s*:\s*([a-z-]+)/i.exec(m[2]);
+			if (a) map[m[1]] = tbNormAlign(a[1]);
+		}
+	});
+	return map;
+}
+
+var TB_DROP = { script: 1, style: 1, noscript: 1, template: 1 };
+function tbCellText(node) {
+	var out = '';
+	Array.prototype.forEach.call(node.childNodes, function (ch) {
+		if (ch.nodeType === 3) out += tbEsc(String(ch.nodeValue).replace(/\s+/g, ' '));
+		else if (ch.nodeType === 1) {
+			var tag = ch.tagName.toLowerCase();
+			if (TB_DROP[tag]) return;
+			out += tag === 'br' ? '<br>' : tbCellText(ch);
+		}
+	});
+	return out;
+}
+
+function tbStrip(text) {
+	return text.replace(/^(?: |<br>)+|(?: |<br>)+$/g, '').replace(/ ?<br> ?/g, '<br>');
+}
+
+function tbClipboardTable(html) {
+	var doc = new DOMParser().parseFromString(String(html), 'text/html');
+	var tb = doc.querySelector('table');
+	if (!tb) return null;
+	var classAlign = tbClassAligns(doc);
+	var trs = Array.prototype.filter.call(tb.querySelectorAll('tr'), function (tr) { return tr.closest('table') === tb; });
+	if (!trs.length) return null;
+	var cells = [], merged = false;
+	trs.forEach(function (tr, r) {
+		var row = [];
+		Array.prototype.forEach.call(tr.children, function (el) {
+			var t = el.tagName.toLowerCase();
+			if (t !== 'td' && t !== 'th') return;
+			var cs = Math.max(1, parseInt(el.getAttribute('colspan'), 10) || 1);
+			var rs = Math.max(1, parseInt(el.getAttribute('rowspan'), 10) || 1);
+			rs = Math.min(rs, trs.length - r);
+			var style = el.getAttribute('style') || '';
+			var align = tbNormAlign(el.style && el.style.textAlign) || tbNormAlign(el.getAttribute('align'));
+			if (!align) {
+				String(el.className || '').split(/\s+/).forEach(function (c) { if (classAlign[c]) align = classAlign[c]; });
+			}
+			var text = tbStrip(tbCellText(el));
+			if (cs > 1 && /mso-ignore\s*:\s*colspan/i.test(style)) {
+				row.push({ t: t, cs: 1, rs: rs, text: text, align: align });
+				for (var k = 1; k < cs; k++) row.push({ t: t, cs: 1, rs: rs, text: '', align: '' });
+				if (rs > 1) merged = true;
+				return;
+			}
+			if (cs > 1 || rs > 1) merged = true;
+			row.push({ t: t, cs: cs, rs: rs, text: text, align: align });
+		});
+		cells.push(row);
+	});
+	var aligns = [], covered = [], r, c;
+	for (r = 0; r < cells.length; r++) { aligns.push([]); covered.push([]); }
+	var h = ['<table>'];
+	for (r = 0; r < cells.length; r++) {
+		c = 0;
+		h.push('<tr>');
+		cells[r].forEach(function (x) {
+			while (covered[r][c]) c++;
+			for (var a = 0; a < x.rs; a++) for (var b = 0; b < x.cs; b++) {
+				covered[r + a][c + b] = true;
+				aligns[r + a][c + b] = x.align;
+			}
+			h.push('<' + x.t + (x.cs > 1 ? ' colspan="' + x.cs + '"' : '') + (x.rs > 1 ? ' rowspan="' + x.rs + '"' : '')
+				+ (x.align ? ' style="text-align:' + x.align + '"' : '') + '>' + x.text + '</' + x.t + '>');
+			c += x.cs;
+		});
+		h.push('</tr>');
+	}
+	h.push('</table>');
+	for (r = 0; r < aligns.length; r++) for (c = 0; c < aligns[r].length; c++) if (aligns[r][c] == null) aligns[r][c] = '';
+	return { merged: merged, html: h.join(''), aligns: aligns };
+}
+
+function tbApplyPastedAligns() {
+	var p = TB_PASTE_ALIGNS;
+	TB_PASTE_ALIGNS = null;
+	if (!p) return;
+	for (var i = 0; i < p.aligns.length; i++) {
+		for (var j = 0; j < p.aligns[i].length; j++) {
+			var R = p.r + i, C = p.c + j;
+			if (R >= G.rows || C >= G.cols) continue;
+			var m = masterOf(R, C), cell = G.grid[m.r][m.c];
+			if (p.aligns[i][j]) cell.align = p.aligns[i][j];
+			else delete cell.align;
+		}
+	}
+	render();
+}
+
 function pasteGrid(rows) {
 	var startR = sel ? sel.r1 : 0, startC = sel ? sel.c1 : 0;
 	var maxCols = 0;
@@ -917,12 +1032,26 @@ document.addEventListener('paste', function (e) {
 	if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA')) return;
 	var cd = e.clipboardData || window.clipboardData;
 	if (!cd) return;
+	var clip = cd.getData('text/html');
+	var tbx = clip && typeof tbClipboardTable === 'function' ? tbClipboardTable(clip) : null;
+	if (tbx && tbx.merged) {
+		e.preventDefault();
+		var keepHead = G.theadRows, keepCap = G.caption;
+		if (importHtml(tbx.html)) {
+			G.theadRows = Math.min(keepHead, G.rows); G.caption = keepCap;
+			syncInputs(); render();
+			toast('붙여넣기(병합 포함): 표를 바꿨다 — Ctrl+Z 로 되돌린다');
+		}
+		return;
+	}
 	var text = cd.getData('text');
 	if (!text) return;
 	var rows = text.replace(/\r\n/g, '\n').replace(/\n+$/, '').split('\n').map(function (r) { return r.split('\t'); });
-	if (rows.length === 1 && rows[0].length === 1) return;   
+	if (rows.length === 1 && rows[0].length === 1) return;
 	e.preventDefault();
+	if (tbx) TB_PASTE_ALIGNS = { r: sel ? sel.r1 : 0, c: sel ? sel.c1 : 0, aligns: tbx.aligns };
 	pasteGrid(rows);
+	if (typeof tbApplyPastedAligns === 'function') tbApplyPastedAligns();
 });
 
 function initSplitter() {

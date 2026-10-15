@@ -802,7 +802,7 @@ var SNIPPETS = {
           params: [{id:'seq_name', label:'테이블명(MySQL) / 시퀀스명(MariaDB)', placeholder:'user_info', width:200}],
           query: function(p) {
             var n = p.seq_name || 'table_name';
-            return "-- MySQL: 다음 채번 예정값(참고용 — 동시성 환경에서 실제 채번값과 다를 수 있음)\nSELECT AUTO_INCREMENT FROM INFORMATION_SCHEMA.TABLES\nWHERE  TABLE_SCHEMA = DATABASE() AND LOWER(TABLE_NAME) = '" + n.toLowerCase() + "';\n\n-- MariaDB 10.3+ 시퀀스\nSELECT NEXT VALUE FOR " + n + ";   -- 다음값(증가 발생)\nSELECT PREVIOUS VALUE FOR " + n + ";   -- 세션에서 마지막으로 뽑은 값(증가 없음)\nSHOW CREATE SEQUENCE " + n + ";   -- 현재 정의(현재값 포함) 확인";
+            return "-- MySQL: 다음 채번 예정값(참고용 — 동시성 환경에서 실제 채번값과 다를 수 있음)\nSELECT AUTO_INCREMENT FROM INFORMATION_SCHEMA.TABLES\nWHERE  TABLE_SCHEMA = DATABASE() AND LOWER(TABLE_NAME) = '" + n.toLowerCase() + "';\n\n-- MariaDB 10.3+ 시퀀스 — MySQL 에는 SEQUENCE 가 없어(1064) 주석으로 둔다. MariaDB 면 앞의 -- 를 지우고 쓴다\n-- SELECT NEXT VALUE FOR " + n + ";   -- 다음값(증가 발생)\n-- SELECT PREVIOUS VALUE FOR " + n + ";   -- 세션에서 마지막으로 뽑은 값(증가 없음)\n-- SHOW CREATE SEQUENCE " + n + ";   -- 현재 정의(현재값 포함) 확인";
           }
         },
         {
