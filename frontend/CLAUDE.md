@@ -42,11 +42,11 @@ lib/github.ts ProjectShop 저장소 숫자·최근 커밋을 GitHub API 로 받�
 
 ## 번들러
 
-Next 16 은 Turbopack 으로 빌드한다. postcss 플러그인을 이름 문자열로 적으면 Turbopack 워커가 못 찾아서 `Cannot find module 'tailwindcss'` 로 빌드가 깨진다. `postcss.config.js` 에서 `require` 로 직접 넘겨 해석을 그 파일 기준으로 고정해 뒀다.
+Next 16 은 Turbopack 으로 빌드한다. postcss 플러그인을 이름 문자열로 적으면 Turbopack 워커가 못 찾아 빌드가 깨진다. `postcss.config.js` 에서 `require('@tailwindcss/postcss')` 로 직접 넘겨 해석을 그 파일 기준으로 고정해 뒀다.
 
 ## 스타일
 
-Tailwind가 설치돼 있고 `tailwind.config.js`도 있지만, **화면 스타일은 대부분 `style={{ }}` 인라인으로 작성돼 있다.** 페이지당 인라인 수십 건, className 10건 안팎. 기존 페이지를 고칠 때는 그 페이지가 이미 쓰는 방식을 따라가고, 인라인을 Tailwind 클래스로 바꾸는 일괄 변환은 요청 없이 하지 않는다.
+Tailwind 4 가 설치돼 있지만(설정 파일 없이 `globals.css` 의 `@import "tailwindcss"` 와 v3 preflight 호환 규칙만 쓴다), **화면 스타일은 대부분 `style={{ }}` 인라인으로 작성돼 있다.** 페이지당 인라인 수십 건, className 10건 안팎. 기존 페이지를 고칠 때는 그 페이지가 이미 쓰는 방식을 따라가고, 인라인을 Tailwind 클래스로 바꾸는 일괄 변환은 요청 없이 하지 않는다.
 
 ## 환경변수
 
