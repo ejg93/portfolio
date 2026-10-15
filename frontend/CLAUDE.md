@@ -1,4 +1,4 @@
-# frontend — Next.js 14 앱
+# frontend — Next.js 16 앱
 
 App Router 기반 포트폴리오 화면. Vercel이 이 폴더를 루트로 잡고 `main` push마다 자동 배포한다.
 
@@ -87,7 +87,7 @@ npm run dev               # localhost:3000
 | `npm run lint` | `useEffect` 의존성 누락, 이펙트 안 setState 등 실수 패턴 | 컴포넌트·훅 수정 후 |
 | `npm run build` | 정적 생성·설정 오류. **lint 는 안 돈다**(Next 16) | **커밋 전 최소 1회** |
 | `npm audit --omit=dev` | 배포본에 실리는 의존성의 취약점 | 의존성 추가·변경 후 |
-| `npm run e2e` | 라우트 9개와 public/ 정적 HTML 9장을 크로미엄으로 열어 콘솔 에러·죽은 내부 링크·접근성 위반·폰 폭 가로 넘침 | 화면 문구·색·레이아웃을 고친 뒤 |
+| `npm run e2e` | 라우트 9개와 public/ 정적 HTML 10장을 크로미엄으로 열어 콘솔 에러·죽은 내부 링크·접근성 위반·폰 폭 가로 넘침 | 화면 문구·색·레이아웃을 고친 뒤 |
 
 `verify.sh` 의 빌드는 `NEXT_DIST_DIR=.next-verify` 로 딴 폴더에 쓴다 — dev 서버가 쓰는 `.next` 를 갈아엎으면 `GET / 500` 이 난다. 손으로 돌릴 때도 dev 가 떠 있으면 그 변수를 붙인다.
 

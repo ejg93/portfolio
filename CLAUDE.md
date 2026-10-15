@@ -6,12 +6,12 @@
 
 | 경로 | 무엇이 들어 있나 | 규칙 |
 |---|---|---|
-| `frontend/` | Next.js 14 App Router 앱. Vercel 배포 | [frontend/CLAUDE.md](frontend/CLAUDE.md) |
+| `frontend/` | Next.js 16 App Router 앱. Vercel 배포 | [frontend/CLAUDE.md](frontend/CLAUDE.md) |
 | `backend/` | Spring Boot 4 REST API. Railway 배포 | [backend/CLAUDE.md](backend/CLAUDE.md) |
 | `frontend/public/toolbox/` | 사내 폐쇄망에 반입하는 단일 파일 HTML 도구 모음 | [toolbox/CLAUDE.md](frontend/public/toolbox/CLAUDE.md) |
 | `frontend/public/notes/` | 개인 학습 메모(마크다운) 보관 | 요청받은 파일만 수정한다. 정리·리팩터링 대상 아님 |
 | `frontend/public/game/` | 게임 확률 계산기 HTML. 개인용 | 요청받은 파일만 수정한다 |
-| `frontend/public/study/` | 학습 노트 HTML 5장 + 공통 셸(`shell.css`·`shell.js`). 숨은 경로 | 요청받은 파일만 수정한다. 노트 규격은 [frontend/CLAUDE.md](frontend/CLAUDE.md) 「/study」. 글 규칙 4·6 은 hook·CI 가 본다(「」 인용·SVG·pre 는 면제) |
+| `frontend/public/study/` | 학습 노트 HTML 6장 + 공통 셸(`shell.css`·`shell.js`). 숨은 경로 | 요청받은 파일만 수정한다. 노트 규격은 [frontend/CLAUDE.md](frontend/CLAUDE.md) 「/study」. 글 규칙 4·6 은 hook·CI 가 본다(「」 인용·SVG·pre 는 면제) |
 | `frontend/public/docrules/` | 한글·엑셀 문서 배포 규칙 HTML. 폐쇄망 반입 대상 | 요청받은 파일만 수정한다 |
 | `frontend/public/jobhunt/` | 지원 회사 평판·통근을 한 표에서 거르는 HTML. 개인용, 데이터는 localStorage | 요청받은 파일만 수정한다 |
 | `doc/` | 외부 API 스펙·배포 설정처럼 코드가 답 못 하는 것만. 색인은 [doc/README.md](doc/README.md) | 각 구역 CLAUDE.md의 트리거에 걸릴 때만 읽는다 |
@@ -27,7 +27,7 @@
 | 무엇이 바뀌면 | 무엇을 돌리나 |
 |---|---|
 | `frontend/app`·`components`·`lib`, 빌드 설정 | `npm run typecheck` · `npm run build`(lint 포함) |
-| 위에 더해 `frontend/public/` 의 study·game·docrules·jobhunt·toolbox, `frontend/e2e/` | `npm run e2e` — 라우트 9개와 정적 HTML 9장을 크로미엄으로 연다 |
+| 위에 더해 `frontend/public/` 의 study·game·docrules·jobhunt·toolbox, `frontend/e2e/` | `npm run e2e` — 라우트 9개와 정적 HTML 10장을 크로미엄으로 연다 |
 | `backend/src`·`pom.xml` | JDK 17 로 `./mvnw test` |
 
 e2e 는 방금 만든 `.next-verify` 빌드를 그대로 띄워서 같은 산출물을 두 번 만들지 않는다.

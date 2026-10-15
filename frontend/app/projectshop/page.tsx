@@ -273,7 +273,7 @@ export default async function ProjectShop() {
                 <p style={{ ...S.body, margin: '0 0 12px' }}>{t.body}</p>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                   {t.links.map(l => (
-                    <a key={l} href={`${REPO_SHOP}/blob/main/${l}`} target="_blank" rel="noopener noreferrer" className="mono"
+                    <a key={l} href={`${REPO_SHOP}/blob/main/${l}`} target="_blank" rel="noopener noreferrer" className="mono tap"
                       style={{ fontSize: '11px', color: 'var(--accent)', textDecoration: 'none', wordBreak: 'break-all' }}>
                       {l} →
                     </a>

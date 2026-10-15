@@ -19,6 +19,7 @@ const nextConfig = {
   },
   async rewrites() {
     return [
+      { source: '/favicon.ico', destination: '/icon.svg' },
       {
         source: '/study/:slug',
         destination: '/study/:slug.html',

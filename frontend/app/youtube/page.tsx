@@ -256,7 +256,7 @@ export default function YoutubePage() {
       {/* URL 입력 */}
       <div style={{ display: 'flex', gap: '10px', marginBottom: '24px' }}>
         <input
-          value={url}
+          name="url" value={url}
           onChange={e => setUrl(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && fetchComments()}
           placeholder="유튜브 URL 또는 영상 ID 입력..."
@@ -330,7 +330,7 @@ export default function YoutubePage() {
             <span className="mono" style={{ fontSize: '11px', color: 'var(--muted)' }}>좋아요</span>
             <input
               type="number"
-              value={minLike}
+              name="minLike" value={minLike}
               onChange={e => setMinLike(e.target.value)}
               placeholder="최소"
               min={0}
@@ -339,7 +339,7 @@ export default function YoutubePage() {
             <span className="mono" style={{ fontSize: '11px', color: 'var(--muted)' }}>~</span>
             <input
               type="number"
-              value={maxLike}
+              name="maxLike" value={maxLike}
               onChange={e => setMaxLike(e.target.value)}
               placeholder="최대"
               min={0}
@@ -357,7 +357,7 @@ export default function YoutubePage() {
           {/* 키워드 검색 */}
           <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
             <select
-              value={searchTarget}
+              name="searchTarget" value={searchTarget}
               onChange={e => setSearchTarget(e.target.value as SearchTarget)}
               style={{
                 padding: '10px 12px',
@@ -372,7 +372,7 @@ export default function YoutubePage() {
               ))}
             </select>
             <input
-              value={keyword}
+              name="keyword" value={keyword}
               onChange={e => setKeyword(e.target.value)}
               placeholder="검색어 입력..."
               style={{
@@ -389,7 +389,7 @@ export default function YoutubePage() {
             <span className="mono" style={{ fontSize: '11px', color: 'var(--muted)' }}>작성일</span>
             <input
               type="date"
-              value={dateFrom}
+              name="dateFrom" value={dateFrom}
               onChange={e => setDateFrom(e.target.value)}
               style={{
                 padding: '8px 12px',
@@ -402,7 +402,7 @@ export default function YoutubePage() {
             <span className="mono" style={{ fontSize: '11px', color: 'var(--muted)' }}>~</span>
             <input
               type="date"
-              value={dateTo}
+              name="dateTo" value={dateTo}
               onChange={e => setDateTo(e.target.value)}
               style={{
                 padding: '8px 12px',

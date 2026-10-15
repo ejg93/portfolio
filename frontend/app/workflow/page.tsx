@@ -169,7 +169,7 @@ export default function Workflow() {
               )}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '12px' }}>
                 {g.links.map(l => (
-                  <a key={l.href} href={l.href} target="_blank" rel="noopener noreferrer" className="mono" style={linkStyle}>
+                  <a key={l.href} href={l.href} target="_blank" rel="noopener noreferrer" className="mono tap" style={linkStyle}>
                     {l.label} →
                   </a>
                 ))}

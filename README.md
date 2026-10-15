@@ -17,7 +17,7 @@ Next.js + Spring Boot 풀스택. 프론트는 Vercel, 백엔드는 Railway에 �
 
 ## 스택
 
-- **프론트**: Next.js 14(App Router), React 18, TypeScript
+- **프론트**: Next.js 16(App Router), React 19, TypeScript
 - **백엔드**: Spring Boot 4(Java 17). DB 없이 외부 API 호출만 한다
 - **배포**: Vercel(frontend) + Railway(backend), `main` push마다 자동배포
 
