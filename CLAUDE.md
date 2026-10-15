@@ -7,7 +7,7 @@
 | 경로 | 무엇이 들어 있나 | 규칙 |
 |---|---|---|
 | `frontend/` | Next.js 14 App Router 앱. Vercel 배포 | [frontend/CLAUDE.md](frontend/CLAUDE.md) |
-| `backend/` | Spring Boot 3 REST API. Railway 배포 | [backend/CLAUDE.md](backend/CLAUDE.md) |
+| `backend/` | Spring Boot 4 REST API. Railway 배포 | [backend/CLAUDE.md](backend/CLAUDE.md) |
 | `frontend/public/toolbox/` | 사내 폐쇄망에 반입하는 단일 파일 HTML 도구 모음 | [toolbox/CLAUDE.md](frontend/public/toolbox/CLAUDE.md) |
 | `frontend/public/notes/` | 개인 학습 메모(마크다운) 보관 | 요청받은 파일만 수정한다. 정리·리팩터링 대상 아님 |
 | `frontend/public/game/` | 게임 확률 계산기 HTML. 개인용 | 요청받은 파일만 수정한다 |
