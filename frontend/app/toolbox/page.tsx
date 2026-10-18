@@ -4,7 +4,7 @@ import { S, Section } from '@/components/CaseStudy'
 
 export const metadata = { title: 'TOOLBOX' }
 
-const REPO_PORTFOLIO = 'https://github.com/ejg93/public'
+const REPO_PORTFOLIO = 'https://github.com/ejg93/portfolio'
 const SAMPLE_DIR = encodeURI('/toolbox/논리명_변환기_sample')
 
 type Tool = { file: string; icon: string; name: string; desc: string }
