@@ -7,7 +7,7 @@ import {
 export const metadata = { title: 'AI WORKFLOW' }
 
 const REPO_SHOP = 'https://github.com/ejg93/ProjectShop'
-const REPO_PORTFOLIO = 'https://github.com/ejg93/public'
+const REPO_PORTFOLIO = 'https://github.com/ejg93/portfolio'
 const REPO_CHUNKFRAME = 'https://github.com/ejg93/chunkframe'
 
 const SKELETON = [
