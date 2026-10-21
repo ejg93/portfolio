@@ -109,13 +109,13 @@ jobs:
       # 그 다운로드가 CI 실행 전부의 앞에 걸린다. 2026-09-23 에 Maven Central 이 403 을 내서
       # 테스트가 한 개도 못 돌고 13초 만에 죽었다 — 코드는 안 바뀌었고 재시도하니 통과했다.
       # 러너에 이미 깔린 mvn 을 쓰면 그 다운로드가 사라진다. 없는 이미지를 만나면 래퍼로 돌아간다.
-      - name: mvn test
+      - name: mvn test + 선언 순서
         run: |
           if command -v mvn >/dev/null 2>&1; then
             mvn -v | head -1
-            mvn -B -q test
+            mvn -B -q test checkstyle:check
           else
             echo "러너에 mvn 이 없다 — 래퍼로 돌린다"
             chmod +x mvnw
-            ./mvnw -B -q test
+            ./mvnw -B -q test checkstyle:check
           fi

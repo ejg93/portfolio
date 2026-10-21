@@ -25,14 +25,6 @@ import java.time.Duration;
 @RequiredArgsConstructor
 public class BattleService {
 
-    @Value("${anthropic.api.key}")
-    private String apiKey;
-
-    // 테스트가 가짜 서버로 갈아끼운다. 평소에는 이 기본값을 쓴다
-    @Value("${anthropic.api.url:https://api.anthropic.com/v1/messages}")
-    private String anthropicUrl;
-
-
     private static final String ANTHROPIC_VERSION = "2023-06-01";
     private static final int MAX_TOKENS = 400;
 
@@ -60,6 +52,13 @@ public class BattleService {
     // 모델 응답은 몇십 초가 걸린다. 그래도 상한이 없으면 업스트림이 안 끊을 때 스레드가 그대로 물린다
     private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(5);
     private static final Duration READ_TIMEOUT    = Duration.ofSeconds(60);
+
+    @Value("${anthropic.api.key}")
+    private String apiKey;
+
+    // 테스트가 가짜 서버로 갈아끼운다. 평소에는 이 기본값을 쓴다
+    @Value("${anthropic.api.url:https://api.anthropic.com/v1/messages}")
+    private String anthropicUrl;
 
     private final ObjectMapper mapper = new ObjectMapper();
     private final HttpClient httpClient = HttpClient.newBuilder()

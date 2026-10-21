@@ -22,6 +22,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 // 진짜로 부르면 호출마다 요금이 나가고 답도 매번 다르다.
 class BattleServiceTest {
 
+    private static final String OK_BODY = """
+            {"content":[{"type":"text","text":"그건 근거가 없다"}],"usage":{"output_tokens":42}}""";
+
     private StubServer stub;
     private BattleService service;
     private final ObjectMapper mapper = new ObjectMapper();
@@ -49,9 +52,6 @@ class BattleServiceTest {
             return new Object[]{status, body};
         });
     }
-
-    private static final String OK_BODY = """
-            {"content":[{"type":"text","text":"그건 근거가 없다"}],"usage":{"output_tokens":42}}""";
 
     private BattleRequest request(String persona, String userMsg) {
         BattleRequest req = new BattleRequest();
