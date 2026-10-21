@@ -16,7 +16,7 @@ changed=$( { git diff "$base" --name-only 2>/dev/null; git ls-files --others --e
 hit() { [ "${1:-}" = "--all" ] || printf '%s\n' "$changed" | grep -qE "$2"; }
 fe=0; be=0; e2=0
 hit "${1:-}" '^frontend/(app|components|lib)/|^frontend/(package\.json|package-lock\.json|next\.config\.js|tsconfig\.json|tailwind\.config\.js|postcss\.config\.js|eslint\.config\.mjs)$' && fe=1
-hit "${1:-}" '^backend/(src/|pom\.xml$|Dockerfile$)' && be=1
+hit "${1:-}" '^backend/(src/|pom\.xml$|Dockerfile$|checkstyle\.xml$)' && be=1
 # 앱 화면과 public/ 정적 HTML 을 둘 다 e2e 가 든다. 정적 HTML 은 typecheck·lint·build 가 한 줄도 안 본다
 hit "${1:-}" '^frontend/(app|components|lib)/|^frontend/public/(study|game|docrules|jobhunt|toolbox)/|^frontend/e2e/|^frontend/playwright\.config\.ts$' && e2=1
 
@@ -56,10 +56,10 @@ if [ $e2 = 1 ] && [ $ok = 1 ]; then
   fi
 fi
 if [ $be = 1 ]; then
-  echo "== backend 바뀜 → ./mvnw test (JDK 17)"
+  echo "== backend 바뀜 → ./mvnw test + 선언 순서 검사 (JDK 17)"
   # 시스템 JAVA_HOME 은 JDK 11 이라 못 쓴다(backend/CLAUDE.md 「검증」). 리눅스 러너는 그대로.
   case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*) export JAVA_HOME="C:/Program Files/Java/jdk-17.0.19" ;; esac
-  (cd backend && ./mvnw -B -q test) >"$log" 2>&1 || { grep -E 'ERROR|error:' "$log" | head -30; ok=0; }
+  (cd backend && ./mvnw -B -q test checkstyle:check) >"$log" 2>&1 || { grep -E 'ERROR|error:' "$log" | head -30; ok=0; }
 fi
 if [ $fe = 0 ] && [ $be = 0 ] && [ $e2 = 0 ]; then
   echo "코드도 화면도 안 바뀌었다 — 돌릴 것이 없다."

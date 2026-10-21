@@ -28,7 +28,7 @@
 |---|---|
 | `frontend/app`·`components`·`lib`, 빌드 설정 | `npm run typecheck` · `npm run build`(lint 포함) |
 | 위에 더해 `frontend/public/` 의 study·game·docrules·jobhunt·toolbox, `frontend/e2e/` | `npm run e2e` — 라우트 9개와 정적 HTML 10장을 크로미엄으로 연다 |
-| `backend/src`·`pom.xml` | JDK 17 로 `./mvnw test` |
+| `backend/src`·`pom.xml`·`checkstyle.xml` | JDK 17 로 `./mvnw test checkstyle:check`(선언 순서) |
 
 e2e 는 방금 만든 `.next-verify` 빌드를 그대로 띄워서 같은 산출물을 두 번 만들지 않는다.
 
