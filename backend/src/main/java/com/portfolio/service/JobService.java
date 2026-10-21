@@ -27,6 +27,14 @@ import java.util.Map;
 @Service
 public class JobService {
 
+    // 서울시 중랑구 동일로 143길 70-10
+    private static final double USER_LAT = 37.5966;
+    private static final double USER_LNG = 127.0869;
+
+    // 타임아웃이 없으면 업스트림이 안 끊을 때 톰캣 스레드가 그대로 물린다
+    private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(5);
+    private static final Duration READ_TIMEOUT    = Duration.ofSeconds(20);
+
     @Value("${saramin.access.key:}")
     private String saraminKey;
 
@@ -40,18 +48,7 @@ public class JobService {
     @Value("${kakao.keyword.url:https://dapi.kakao.com/v2/local/search/keyword.json}")
     private String kakaoKeywordUrl;
 
-    // 서울시 중랑구 동일로 143길 70-10
-    private static final double USER_LAT = 37.5966;
-    private static final double USER_LNG = 127.0869;
-
-
-
-
     private final ObjectMapper mapper     = new ObjectMapper();
-    // 타임아웃이 없으면 업스트림이 안 끊을 때 톰캣 스레드가 그대로 물린다
-    private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(5);
-    private static final Duration READ_TIMEOUT    = Duration.ofSeconds(20);
-
     private final HttpClient   httpClient = HttpClient.newBuilder()
             .connectTimeout(CONNECT_TIMEOUT)
             .build();

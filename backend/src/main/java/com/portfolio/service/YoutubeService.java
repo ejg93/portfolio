@@ -27,13 +27,6 @@ import java.util.Set;
 @Service
 public class YoutubeService {
 
-    @Value("${youtube.api.key}")
-    private String apiKey;
-
-    // 테스트가 가짜 서버로 갈아끼운다. 평소에는 이 기본값을 쓴다
-    @Value("${youtube.api.base-url:https://www.googleapis.com/youtube/v3}")
-    private String baseUrl;
-
     private static final int MAX_COMMENTS = 1000;
     private static final int PAGE_SIZE    = 100;
     // 댓글 수만 세면 빈 페이지가 이어질 때 수집이 안 끝난다. 장수도 같이 센다
@@ -43,6 +36,13 @@ public class YoutubeService {
     // 타임아웃이 없으면 업스트림이 안 끊을 때 톰캣 스레드가 그대로 물린다
     private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(5);
     private static final Duration READ_TIMEOUT    = Duration.ofSeconds(20);
+
+    @Value("${youtube.api.key}")
+    private String apiKey;
+
+    // 테스트가 가짜 서버로 갈아끼운다. 평소에는 이 기본값을 쓴다
+    @Value("${youtube.api.base-url:https://www.googleapis.com/youtube/v3}")
+    private String baseUrl;
 
     private final ObjectMapper mapper = new ObjectMapper();
     private final HttpClient httpClient = HttpClient.newBuilder()
