@@ -146,6 +146,9 @@ var GROUPS = [['common', 'ㄱ 공통 잔재'], ['jsp', 'ㄹ JSP'], ['tsx', 'ㅁ 
 var STORE = 'codeCheck.rules';
 var state = { groups: {}, rules: {} };
 var found = [];
+var suppressed = 0;
+var UNUSED = { id: 'common.unusedIgnore', group: 'common', severity: 'info', message: '아무 지적도 빼지 않은 tb-ignore 표식' };
+var MARK = /(?:\/\/|\/\*|\*|#|<!--|<%--|--)[ \t]*(tb-ignore(-next)?)(?![\w-])/g;
 
 function $(id) { return document.getElementById(id); }
 
@@ -343,14 +346,58 @@ function excerpt(line) {
 	return t.length > 160 ? t.substring(0, 160) : t;
 }
 
+function markIds(line, from) {
+	var j = from;
+	while (j < line.length && (line[j] === ' ' || line[j] === '	')) j++;
+	if (j === from || j >= line.length || !/[A-Za-z]/.test(line[j])) return [];
+	var m = /^[A-Za-z0-9_.,]+/.exec(line.substring(j));
+	return m[0].split(',').filter(function (id) { return id !== ''; });
+}
+
+function marks(raw) {
+	var out = [];
+	for (var i = 0; i < raw.length; i++) {
+		MARK.lastIndex = 0;
+		var m;
+		while ((m = MARK.exec(raw[i])) !== null) {
+			var hasNext = i + 1 < raw.length && !(i + 1 === raw.length - 1 && raw[i + 1] === '');
+			out.push({ at: i + 1, next: !!m[2], line: !m[2] ? i + 1 : hasNext ? i + 2 : -1, rules: markIds(raw[i], m.index + m[0].length), used: false });
+		}
+	}
+	return out;
+}
+
+function applyIgnores(out, raw) {
+	var ms = marks(raw);
+	var keep = out.filter(function (f) {
+		var hit = false;
+		ms.forEach(function (mk) {
+			if (mk.line === f.line && (mk.rules.length === 0 || mk.rules.indexOf(f.rule.id) >= 0)) {
+				mk.used = true;
+				hit = true;
+			}
+		});
+		if (hit) suppressed++;
+		return !hit;
+	});
+	if (groupOn(UNUSED.group) && ruleOn(UNUSED.id)) {
+		ms.forEach(function (mk) {
+			if (!mk.used) keep.push({ line: mk.at, rule: UNUSED, excerpt: 'tb-ignore' + (mk.next ? '-next' : '') + (mk.rules.length ? ' ' + mk.rules.join(',') : '') });
+		});
+	}
+	return keep;
+}
+
 function check(text, lang) {
 	var src = text.replace(/\r\n/g, '\n');
 	var raw = src.split('\n');
 	var stripped = null;
 	var out = [];
+	suppressed = 0;
 	RULES.forEach(function (r) {
 		if (!groupOn(r.group) || !ruleOn(r.id) || r.langs.indexOf(lang) < 0) return;
 		var flags = (r.flags || []).join('');
+		if (r.when && !new RegExp(r.when, flags).test(src)) return;
 		var lines = raw;
 		if (r.skipComments) {
 			if (stripped === null) stripped = skipped(src, lang).split('\n');
@@ -377,6 +424,7 @@ function check(text, lang) {
 			if (re.test(lines[k])) out.push({ line: k + 1, rule: r, excerpt: excerpt(raw[k]) });
 		}
 	});
+	out = applyIgnores(out, raw);
 	out.sort(function (a, b) {
 		if (a.line !== b.line) return a.line - b.line;
 		return a.rule.id < b.rule.id ? -1 : a.rule.id > b.rule.id ? 1 : 0;
@@ -418,7 +466,7 @@ function render() {
 	});
 	t.appendChild(tbody);
 	box.appendChild(t);
-	$('count').textContent = rows.length + '/' + found.length + '건';
+	$('count').textContent = rows.length + '/' + found.length + '건' + (suppressed ? ' · 억제 ' + suppressed : '');
 }
 
 function run() {
