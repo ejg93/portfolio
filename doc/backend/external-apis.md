@@ -1,6 +1,6 @@
 # 외부 API 정리
 
-백엔드 `service/` 계층에서 호출하는 외부 API 5종. 전부 HttpClient 5로 호출하고 Jackson으로 파싱한다. API 키는 `application.properties`(git 제외)와 Railway Variables에 등록.
+백엔드 `service/`·`cheongyak/` 에서 호출하는 외부 API 7종. 전부 HttpClient 5로 호출하고 Jackson으로 파싱한다. API 키는 `application.properties`(git 제외)와 Railway Variables에 등록.
 
 ## 1. Anthropic Claude API
 
@@ -31,6 +31,7 @@
 - 사용처: 채용공고 주소 → 좌표 변환 → `JobService.java`
 - 엔드포인트: `GET https://dapi.kakao.com/v2/local/search/keyword.json`
 - 인증: `Authorization: KakaoAK {REST_API_키}` 헤더 (`kakao.rest.key`) — 프론트의 JavaScript 키와 다른 키다 ([kakao-maps-sdk.md](../frontend/kakao-maps-sdk.md) 참고)
+- 청약 지오코딩(`cheongyak/KakaoGeoClient.java`): 주소 검색 `GET https://dapi.kakao.com/v2/local/search/address.json?query=` → `documents[].address.b_code`(법정동코드 10자리, 앞 5자리가 실거래 API 의 `LAWD_CD`)·`region_3depth_name`·`x`·`y`. 공고 주소의 「(…)」「[…]」「일원」 을 떼고 부른다. 비면 단지명으로 키워드 검색 → 그 주소로 다시 주소 검색
 - 정식 문서:
   - Local API 가이드: https://developers.kakao.com/docs/latest/ko/local/dev-guide
   - 키워드 장소 검색: https://developers.kakao.com/docs/latest/ko/local/dev-guide#search-by-keyword
@@ -65,3 +66,37 @@
 - 정식 문서:
   - 공공데이터포털: https://www.data.go.kr/data/15098547/openapi.do
   - 스웨거: https://infuser.odcloud.kr/api/stages/37000/api-docs
+
+## 6. 한국부동산원 청약홈 청약접수 경쟁률 및 특별공급 신청현황 조회 서비스
+
+- 사용처: 수집의 결과 단계 → `cheongyak/ApplyhomeClient.java` `fetchCmpet`·`fetchScores`. 당첨 발표가 지난 판정 대상 공고만, 공고마다 한 번
+- 엔드포인트: Base `https://api.odcloud.kr/api/ApplyhomeInfoCmpetRtSvc/v1`, 전부 GET. 인증·봉투·`cond[…]` 문법은 5절과 같다(같은 `data.go.kr.key`, 활용신청은 따로)
+
+| 오퍼레이션 | 내용 | 쓰나 |
+|---|---|---|
+| `getAPTLttotPblancCmpet` | APT 경쟁률(주택형 × 순위 × 거주 구분) | 쓴다 |
+| `getAptLttotPblancScore` | APT 당첨가점(최저·최고·평균) | 쓴다 |
+| `getRemndrLttotPblancCmpet` | 잔여세대(무순위) 경쟁률 | 쓴다 |
+| `getAPTSpsplyReqstStus` | APT 특별공급 신청현황 | 안 쓴다(특공 판정 없음) |
+| `getUrbtyOfctlLttotPblancCmpet`·`getPblPvtRentLttotPblancCmpet`·`getCancResplLttotPblancCmpet`·`getOPTLttotPblancCmpet` | 판정 대상 아닌 종류 | 안 쓴다 |
+
+- 조건: `cond[HOUSE_MANAGE_NO::EQ]`·`cond[PBLANC_NO::EQ]`(APT 는 `cond[RESIDE_SECD::EQ]` 도 받는다)
+- 경쟁률 필드: `HOUSE_TY`, `RESIDE_SENM`(해당지역·기타지역…), `SUBSCRPT_RANK_CODE`(무순위에는 없다), `SUPLY_HSHLDCO`, `REQ_CNT`, `CMPET_RATE`(「-」 처럼 숫자가 아닐 수 있다 — `cmpet_text` 에 그대로 남긴다)
+- 당첨가점 필드: 코드가 최저·최고·평균을 후보 이름 순으로 읽는다(`NoticeMapper` 의 `*_SCORE_FIELDS`). 활용신청 뒤 실측해 이 줄을 고친다
+- 발표 직후에는 비어 있을 수 있다 — 발표 14일 안은 다음 실행에 다시 보고, 지나면 `result_status = NONE`
+- 정식 문서:
+  - 공공데이터포털: https://www.data.go.kr/data/15098905/openapi.do
+  - 스웨거: https://infuser.odcloud.kr/api/stages/36148/api-docs
+
+## 7. 국토교통부 아파트 매매 실거래가 상세 자료
+
+- 사용처: 수집의 실거래 단계 → `cheongyak/RtmsClient.java`. 지오코딩된 판정 대상 공고의 시군구만, 최근 12개월
+- 엔드포인트: `GET https://apis.data.go.kr/1613000/RTMSDataSvcAptTradeDev/getRTMSDataSvcAptTradeDev?serviceKey=&LAWD_CD=&DEAL_YMD=&numOfRows=1000&pageNo=`
+- 인증: 5절과 같은 `data.go.kr.key`(Decoding, 한 번 인코딩). 활용신청은 따로
+- 응답: **XML**. 정상 `response/header/resultCode` = `000`, 거래는 `response/body/items/item`, 전체 수는 `totalCount`(1000 을 넘으면 `pageNo` 를 올린다). 키·쿼터 오류는 다른 봉투 `OpenAPI_ServiceResponse/cmmMsgHeader/returnReasonCode`
+- 항목: `aptNm`, `umdNm`(법정동), `jibun`, `excluUseAr`(전용㎡), `dealYear·dealMonth·dealDay`, `dealAmount`(만원, 쉼표), `floor`, `buildYear`, `cdealType`(해제 신고면 값이 있다), `dealingGbn`(중개·직거래)
+- 거래 ID 가 없다 — (시군구, 계약월) 단위로 통째로 지우고 다시 넣는다. 이번 달·지난달은 신고가 계속 들어와 7일마다 다시 받는다
+- 쿼터: 활용신청 화면의 값을 따른다(개발계정 기준 일 1만 건 안팎으로 알려져 있다)
+- 정식 문서: https://www.data.go.kr/data/15126468/openapi.do
+
+참고한 공개 저장소(설계만 보고 코드는 가져오지 않았다, 2026-10): leeyunbo/house-ping(MIT — 시세 배지 틀·경쟁률 API), choiyounggi/chungyak-alimi(LH API 호출 방식), BaekJaeIn/cheongYak-radar(LH 상세 접수일)

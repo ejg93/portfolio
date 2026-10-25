@@ -46,6 +46,7 @@ GitHub(main push)
     - `SPRING_DATASOURCE_URL` = `jdbc:postgresql://${{Postgres.PGHOST}}:${{Postgres.PGPORT}}/${{Postgres.PGDATABASE}}`, `SPRING_DATASOURCE_USERNAME` = `${{Postgres.PGUSER}}`, `SPRING_DATASOURCE_PASSWORD` = `${{Postgres.PGPASSWORD}}` — 같은 프로젝트 `Postgres` 서비스를 내부망으로 참조한다
     - `DATA_GO_KR_KEY` — 공공데이터포털 일반 인증키(Decoding)
     - `CHEONGYAK_COLLECT_TOKEN` — 수집 입구 보호 토큰. GitHub Secrets 에도 같은 값(`collect-cheongyak.yml` 이 헤더로 보낸다)
+    - `KAKAO_REST_KEY` — 청약 공고 지오코딩에도 쓴다. 없으면 수집이 지오코딩·실거래·시세 단계를 건너뛴다
 - DB: 같은 프로젝트의 `Postgres` 서비스. Flyway 가 기동 때 `db/migration` 을 적용한다. TCP Proxy(Public Access)는 꺼 둔다 — 백엔드는 내부망으로 붙는다
 - 대시보드: https://railway.com/dashboard
 - 정식 문서:
@@ -60,4 +61,6 @@ GitHub(main push)
 3. 백엔드 URL 변경 시: Vercel의 `NEXT_PUBLIC_SPRING_URL` 갱신 후 프론트 재배포 (빌드 시점 박제이므로)
 4. CORS 오류 발생 시: `WebConfig.java`의 허용 origin에 프론트 도메인 포함됐는지 확인
 5. datasource 변수 없이 배포하면 기동이 실패해 배포 확인(`/api/jobs`)이 빨갛게 된다
+6. Railway 변수는 저장만 하면 반영되지 않는다 — 캔버스 위 「Apply N changes」(Deploy)를 눌러야 컨테이너에 들어간다
+7. 청약 수집이 도는 중(평일 09:30·18:00 KST 뒤 40분)에 배포하면 그 수집은 RUNNING 으로 버려진다. 60분 뒤 다음 수집 시작이 「중단됨」 으로 닫는다
 6. Postgres 의 TCP Proxy 가 켜져 있으면 끈다

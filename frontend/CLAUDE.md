@@ -26,7 +26,7 @@ lib/github.ts ProjectShop 저장소 숫자·최근 커밋을 GitHub API 로 받�
 | `/about` | - | 소개 |
 | `/youtube` | `GET /api/youtube/{comments,replies}` | 유튜브 댓글 뷰어 |
 | `/public-data` | `GET /api/jobs` | 채용정보 목록 + 지도. Sidebar·홈에 없고 URL 직접 접근만 된다 |
-| `/cheongyak` | `GET /api/cheongyak/{notices,runs,rules}`·`POST /api/cheongyak/judge` | 청약 공고 판정(LAB). 내 조건 → 수도권 공고 카드별 1순위·2순위·불가와 근거. 판정은 서버 규칙 엔진 응답을 그대로 그린다. 조건·검색 칩은 localStorage `cheongyak-slots`(슬롯 5개)·`cheongyak-last-slot` 에만 둔다 |
+| `/cheongyak` | `GET /api/cheongyak/{notices,runs,rules}`·`POST /api/cheongyak/judge` | 청약 공고 판정(LAB). 내 조건 → 수도권 공고 카드별 1순위·2순위·불가와 근거. 판정은 서버 규칙 엔진 응답을 그대로 그린다. 발표 끝난 공고는 경쟁률·최저 당첨가점, 발표 전 APT 민영은 지역 당첨가점 참고치, 주택형마다 실거래 시세 대비 배지(최고 분양가 ÷ 시세 중앙값, 0.90·1.10 경계). 조건·검색 칩은 localStorage `cheongyak-slots`(슬롯 5개)·`cheongyak-last-slot` 에만 둔다 |
 | `/projectshop` | - | 별도 저장소 [ProjectShop](https://github.com/ejg93/ProjectShop) 소개. 설계 결정·작업 방식·CI 체계를 정리한 화면. 숫자와 최근 커밋은 `lib/github.ts` 가 GitHub API 로 받아온다(ISR 15분). 호출이 실패하면 `page.tsx` 의 `FALLBACK` 배열로 떨어진다 |
 | `/workflow` | - | 작업 방식 소개. 세션 뼈대·강제 지점 여섯·chunkframe 템플릿. 막힐 때 찍히는 메시지는 `workflow/quotes.ts` 에 원문 그대로 둔다(줄바꿈 규칙 6의 대상이 아니다) |
 | `/toolbox` | - | 폐쇄망 단일 파일 도구 소개. 카드 목록은 `public/toolbox/toolbox.html` 의 런처 배열을 빌드 때 읽어 만든다. 도구 본체는 `/tools/:path*` rewrite 로 연다 |

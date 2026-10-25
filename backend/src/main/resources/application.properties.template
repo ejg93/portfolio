@@ -27,3 +27,11 @@ cheongyak.collect.token=
 cheongyak.applyhome.base-url=https://api.odcloud.kr/api/ApplyhomeInfoDetailSvc/v1
 # 실행 한 번에 받는 공고문 수. 청약홈에는 1초 간격으로 요청한다
 cheongyak.doc.batch-size=150
+# 경쟁률·당첨가점을 받는 공고 수(APT 2콜·무순위 1콜), 지오코딩 공고 수, 실거래 API 호출 수 — 실행당 상한
+cheongyak.result.batch-size=150
+cheongyak.geo.batch-size=200
+cheongyak.rtms.batch-size=300
+# 시세 표본: 최근 N개월 실거래, 준공 N년 이내, 전용 ±N㎡. 지오코딩은 위 kakao.rest.key 를 쓴다(비면 건너뜀)
+cheongyak.rtms.months=12
+cheongyak.market.build-years=5
+cheongyak.market.area-tolerance=5
