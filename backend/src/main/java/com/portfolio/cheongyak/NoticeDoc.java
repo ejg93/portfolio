@@ -23,6 +23,8 @@ public record NoticeDoc(
 ) {
 
     public static final String OK = "OK";
+    /** 받아서 뽑았지만 컬럼에 안 들어가 저장 못 함 */
+    public static final String SAVE_ERR = "SAVE_ERR";
 
     /** 첨부를 못 받았거나 못 읽은 경우. 값 없이 사유만 남긴다 */
     public static NoticeDoc failed(String status) {

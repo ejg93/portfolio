@@ -127,6 +127,18 @@ class CollectServiceTest {
     }
 
     @Test
+    @DisplayName("추출값이 컬럼에 안 들어가는 공고는 SAVE_ERR 로 표시하고 다음 공고문을 계속 받는다")
+    void docSaveErrorDoesNotStopOthers() {
+        fiveKinds();
+        when(docClient.fetch(eq("REMNDR"), anyString()))
+                .thenReturn(NoticeDoc.builder().status("OK").remndrArea("해당 주택건설지역인 수원특례시").build());
+        CollectRun run = service.run(running(), SINCE);
+        assertThat(run).extracting(CollectRun::docFetched, CollectRun::docOk, CollectRun::docPending).containsExactly(2, 1, 0);
+        assertThat(repo.findNotice("2", "2").orElseThrow().docStatus()).isEqualTo(NoticeDoc.SAVE_ERR);
+        assertThat(repo.findNotice("1", "1").orElseThrow().docStatus()).isEqualTo("OK");
+    }
+
+    @Test
     @DisplayName("세 번째 종류에서 API 가 실패하면 FAIL 로 닫고 앞 두 건은 남는다")
     void apiFailureClosesRunButKeepsSaved() {
         fiveKinds();
