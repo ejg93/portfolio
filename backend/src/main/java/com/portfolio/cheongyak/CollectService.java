@@ -5,6 +5,7 @@ import jakarta.annotation.PreDestroy;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import tools.jackson.databind.JsonNode;
 
@@ -108,7 +109,15 @@ public class CollectService {
         try {
             for (Notice n : repo.judgeTargetsWithoutDoc(docBatch)) {
                 NoticeDoc doc = docClient.fetch(n.kind(), n.pblancUrl());
-                repo.updateDoc(n.houseManageNo(), n.pblancNo(), doc);
+                try {
+                    repo.updateDoc(n.houseManageNo(), n.pblancNo(), doc);
+                } catch (DataIntegrityViolationException e) {
+                    // 추출값이 컬럼에 안 들어가는 공고 하나 때문에 다음 공고까지 멈추지 않게 표시만 하고 넘어간다.
+                    // 표시를 안 하면 다음 실행도 같은 공고에서 걸린다
+                    log.warn("수집 {} 공고문 저장 실패 {}:{} — {}", id, n.houseManageNo(), n.pblancNo(), e.getClass().getSimpleName());
+                    doc = NoticeDoc.failed(NoticeDoc.SAVE_ERR);
+                    repo.updateDoc(n.houseManageNo(), n.pblancNo(), doc);
+                }
                 docFetched++;
                 docOk += NoticeDoc.OK.equals(doc.status()) ? 1 : 0;
             }

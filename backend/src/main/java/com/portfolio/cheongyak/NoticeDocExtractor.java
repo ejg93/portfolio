@@ -32,6 +32,13 @@ public final class NoticeDocExtractor {
     private static final Pattern POINT_GT85 = Pattern.compile("85\\s*㎡\\s*초과\\s*(\\d+|-)");
     // 첫머리 표는 앞쪽에 있다. 본문 전체에서 찾으면 다른 단지·예시 문구에 걸린다
     private static final int HEAD = 6000;
+    // 수도권 밖 시도 표기 → 짧은 이름. 「광주」 만 쓰면 경기 광주시와 섞이니 광주는 광역시 표기만 본다
+    private static final String[][] OTHER_SIDOS = {
+        {"부산", "부산"}, {"대구", "대구"}, {"광주광역시", "광주"}, {"대전", "대전"}, {"울산", "울산"},
+        {"세종", "세종"}, {"강원", "강원"}, {"충청북도", "충북"}, {"충북", "충북"}, {"충청남도", "충남"},
+        {"충남", "충남"}, {"전라북도", "전북"}, {"전북", "전북"}, {"전라남도", "전남"}, {"전남", "전남"},
+        {"경상북도", "경북"}, {"경북", "경북"}, {"경상남도", "경남"}, {"경남", "경남"}, {"제주", "제주"},
+    };
 
     private NoticeDocExtractor() {
     }
@@ -71,7 +78,10 @@ public final class NoticeDocExtractor {
         return b.build();
     }
 
-    /** 지역 문구 → 수도권 · 전국 · 서울/인천/경기(여럿이면 ·) */
+    /**
+     * 지역 문구 → 수도권 · 전국 · 서울/인천/경기(여럿이면 ·) · 수도권 밖 시도 하나(짧은 이름).
+     * 어느 것도 못 고르면 null(「해당 주택건설지역인 수원특례시」 처럼 시 단위만 적힌 경우) — 판정은 공고 확인으로 간다
+     */
     static String area(String s) {
         if (s.contains("수도권")) {
             return "수도권";
@@ -85,7 +95,19 @@ public final class NoticeDocExtractor {
                 hits.add(sido);
             }
         }
-        return hits.isEmpty() ? s.trim() : String.join("·", hits);
+        if (!hits.isEmpty()) {
+            return String.join("·", hits);
+        }
+        String other = null;
+        for (String[] sido : OTHER_SIDOS) {
+            if (s.contains(sido[0])) {
+                if (other != null && !other.equals(sido[1])) {
+                    return null;
+                }
+                other = sido[1];
+            }
+        }
+        return other;
     }
 
     private static Integer rewinYears(String flat, String head) {

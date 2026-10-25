@@ -75,6 +75,16 @@ class NoticeDocExtractorTest {
     }
 
     @Test
+    @DisplayName("무순위 자격이 수도권 밖 시도면 짧은 이름, 시 단위만 적혀 있으면 null — 원문을 그대로 넣지 않는다")
+    void remndrOutsideCapital() {
+        assertThat(NoticeDocExtractor.extract("REMNDR", "현재 부산광역시에 거주하는 무주택세대구성원").remndrArea()).isEqualTo("부산");
+        assertThat(NoticeDocExtractor.extract("REMNDR", "현재 충청남도에 거주하는 성년자").remndrArea()).isEqualTo("충남");
+        NoticeDoc city = NoticeDocExtractor.extract("REMNDR", "현재 해당 주택건설지역인 수원특례시에 거주하는 무주택세대구성원");
+        assertThat(city.remndrArea()).isNull();
+        assertThat(city.remndrHomeless()).isTrue();
+    }
+
+    @Test
     @DisplayName("가점제 비율 표 — 60㎡ 이하 40, 85㎡ 이하 70, 85㎡ 초과 「-」 는 0")
     void pointShareTable() {
         NoticeDoc d = NoticeDocExtractor.extract("APT", POINT);
