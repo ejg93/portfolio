@@ -14,3 +14,16 @@ saramin.access.key=
 battle.enabled=false
 battle.max-user-msg=2000
 battle.max-history=10
+
+# --- 청약 알리미 (datasource 셋이 비면 기동 실패. 로컬은 Docker Postgres — backend/CLAUDE.md 「로컬 실행」) ---
+spring.datasource.url=
+spring.datasource.username=
+spring.datasource.password=
+spring.flyway.enabled=true
+# 공공데이터포털 일반 인증키(Decoding). Encoding 키를 넣으면 이중 인코딩으로 인증 실패
+data.go.kr.key=
+# 수집 API 보호 토큰. 비면 POST /api/cheongyak/collect 가 503
+cheongyak.collect.token=
+cheongyak.applyhome.base-url=https://api.odcloud.kr/api/ApplyhomeInfoDetailSvc/v1
+# 실행 한 번에 받는 공고문 수. 청약홈에는 1초 간격으로 요청한다
+cheongyak.doc.batch-size=150
