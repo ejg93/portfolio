@@ -2,6 +2,7 @@
 
 // ── Spring Boot 백엔드 ────────────────────────────────
 export const SPRING = process.env.NEXT_PUBLIC_SPRING_URL || 'http://localhost:8080'
+export const CHEONGYAK = `${SPRING}/api/cheongyak`
 
 // ── Kakao ─────────────────────────────────────────────
 // JS SDK (브라우저): NEXT_PUBLIC_KAKAO_JS_KEY (.env.local)

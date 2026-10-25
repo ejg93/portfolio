@@ -1,5 +1,5 @@
 'use client'
-import { useCallback, useSyncExternalStore } from 'react'
+import { useCallback, useMemo, useSyncExternalStore } from 'react'
 
 // 브라우저에만 있는 값(localStorage·미디어쿼리·수화 여부)을 리액트가 읽는 방법.
 //
@@ -46,6 +46,51 @@ export function useStoredFlag(key: string, onValue: string, offValue: string) {
       notify()
     },
     [key, onValue, offValue],
+  )
+
+  return [value, set] as const
+}
+
+// 저장이 막힌 브라우저에서도 이번 세션 동안은 값이 바뀌어야 입력이 먹는다. 그때 쓰는 자리
+const memory = new Map<string, string>()
+
+/**
+ * localStorage 에 둔 JSON 값을 상태처럼 쓴다. 스냅샷은 저장된 문자열이라 값이 같으면 같은 참조를 돌려준다
+ * (객체를 스냅샷으로 쓰면 매번 새 객체라 무한히 다시 그린다). fallback 은 모듈 상수로 넘긴다.
+ * 저장이 막히면 메모리에 두고, 읽기 실패·JSON 깨짐은 fallback 으로 읽는다.
+ */
+export function useStoredJson<T>(key: string, fallback: T) {
+  const getSnapshot = useCallback(() => {
+    try {
+      return localStorage.getItem(key) ?? memory.get(key) ?? null
+    } catch {
+      return memory.get(key) ?? null
+    }
+  }, [key])
+
+  const raw = useSyncExternalStore(subscribeStorage, getSnapshot, () => null)
+
+  const value = useMemo<T>(() => {
+    if (raw == null) return fallback
+    try {
+      return JSON.parse(raw) as T
+    } catch {
+      return fallback
+    }
+  }, [raw, fallback])
+
+  const set = useCallback(
+    (next: T) => {
+      const json = JSON.stringify(next)
+      memory.set(key, json)
+      try {
+        localStorage.setItem(key, json)
+      } catch {
+        // 메모리에 둔 값으로 이번 세션은 돈다
+      }
+      notify()
+    },
+    [key],
   )
 
   return [value, set] as const
