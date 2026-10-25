@@ -67,3 +67,21 @@ test('/youtube 는 잘못된 영상 ID 에 오류 상자를 띄운다', async ({
   await expect(page.getByRole('button', { name: '불러오기' })).toBeEnabled({ timeout: 15000 })
   await expect(page.locator('text=/영상을 못 찾았다|할당량/').first()).toBeVisible()
 })
+
+test('/cheongyak 이 수집 이력·공고를 백엔드에서 받아 그린다', async ({ page, request }) => {
+  // 프론트 → 스프링 → Postgres 길. 공고가 비어 있어도(수집 전) 화면은 안 깨져야 한다
+  const errors: string[] = []
+  page.on('console', (m: ConsoleMessage) => m.type() === 'error' && errors.push(m.text()))
+  page.on('pageerror', (e) => errors.push(e.message))
+
+  const runsCall = page.waitForResponse((r) => r.url().includes('/api/cheongyak/runs'))
+  await page.goto('/cheongyak', { waitUntil: 'domcontentloaded' })
+  expect((await runsCall).status(), '/api/cheongyak/runs 응답 코드').toBe(200)
+  await expect(page.locator('h1')).toBeVisible()
+
+  // 규칙 표는 엔진과 같은 상수에서 나온다 — 예치금표·경기 시군 목록이 있어야 한다
+  const rules = await (await request.get(`http://${BACKEND_HOST}/api/cheongyak/rules`)).json()
+  expect(rules, '규칙 표에 예치금이 없다').toHaveProperty('deposit')
+  expect(rules.ggCities, '경기 시군 목록').toContain('평택')
+  expect(errors, '콘솔 에러').toEqual([])
+})
