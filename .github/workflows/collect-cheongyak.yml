@@ -1,0 +1,38 @@
+name: collect-cheongyak
+
+# 청약 공고 수집. 백엔드는 202 로 바로 돌려주고 작업 스레드에서 수집한다 —
+# Railway HTTP 요청은 최대 15분이라 첫 백필을 요청 하나로 기다리면 끊길 수 있다. 여기서 끝날 때까지 폴링한다.
+on:
+  schedule:
+    - cron: '30 0 * * 1-5'   # 09:30 KST 평일. 첫 수집 뒤 공고 요일 분포를 보고 조정한다
+    - cron: '0 9 * * 1-5'    # 18:00 KST 평일
+  workflow_dispatch:
+
+concurrency:
+  group: collect-cheongyak
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: 수집 시작 후 끝날 때까지 기다린다
+        env:
+          TOKEN: ${{ secrets.CHEONGYAK_COLLECT_TOKEN }}
+          BASE: https://public-production-d010.up.railway.app
+        run: |
+          src=cron; [ "${{ github.event_name }}" = workflow_dispatch ] && src=manual
+          code=$(curl -s -o start.json -w '%{http_code}' -X POST -H "X-Collect-Token: $TOKEN" --max-time 30 "$BASE/api/cheongyak/collect?src=$src")
+          cat start.json; echo
+          [ "$code" = 202 ] || { echo "수집 시작 실패 HTTP $code"; exit 1; }
+          id=$(jq -r .id start.json)
+          st=RUNNING
+          for i in $(seq 1 100); do
+            sleep 20
+            curl -s --max-time 15 "$BASE/api/cheongyak/runs/$id" -o run.json || continue
+            st=$(jq -r .status run.json)
+            [ "$st" = RUNNING ] || break
+          done
+          cat run.json; echo
+          [ "$st" = OK ] || { echo "수집 실패 또는 시간 초과: $st"; exit 1; }

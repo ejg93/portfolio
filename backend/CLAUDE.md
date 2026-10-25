@@ -1,6 +1,6 @@
 # backend — Spring Boot 4 API
 
-Java 17 + Spring Boot 4.1.1. 프론트가 호출하는 REST API를 제공하고, Railway가 이 폴더를 루트로 배포한다. DB는 없다.
+Java 17 + Spring Boot 4.1.1. 프론트가 호출하는 REST API를 제공하고, Railway가 이 폴더를 루트로 배포한다. DB 는 Railway Postgres(청약 공고 저장용) 하나다. Flyway 가 `src/main/resources/db/migration` 을 기동 때 적용한다.
 
 ## 구조
 
@@ -8,7 +8,8 @@ Java 17 + Spring Boot 4.1.1. 프론트가 호출하는 REST API를 제공하고,
 com/portfolio/
 ├── controller/   REST 엔드포인트
 ├── service/      외부 API 호출·비즈니스 로직
-└── dto/          요청/응답 객체
+├── dto/          요청/응답 객체
+└── cheongyak/    청약 공고 수집·공고문 추출·조회(한 패키지). rules/ 는 판정 규칙(Spring 의존 없음)
 ```
 
 외부 API 호출은 전부 `service/`에서 한다. 컨트롤러는 요청 검증과 응답 변환만 맡는다. CORS 설정은 `WebConfig.java`에 있다.
@@ -20,10 +21,11 @@ com/portfolio/
 | `POST /api/battle/chat` | `BattleController` / `BattleService` | Anthropic Claude API |
 | `GET /api/youtube/{comments,replies}` | `YoutubeController` / `YoutubeService` | YouTube Data API v3 |
 | `GET /api/jobs` | `JobController` / `JobService` | 사람인 오픈 API + Kakao Local(주소→좌표) |
+| `POST /api/cheongyak/collect` | `CollectController` / `CollectService` | 청약홈 분양정보 API + 청약홈 공고문 첨부. `X-Collect-Token` 필요, 202 로 바로 돌려주고 작업 스레드에서 수집 |
+| `GET /api/cheongyak/{notices,runs,runs/{id},rules}` | `CheongyakController` / `CheongyakQueryService` | 없음(Postgres) |
+| `POST /api/cheongyak/judge` | `CheongyakController` / `rules/Judge` | 없음. 요청 본문(신청자 조건)은 로그·DB 에 안 남긴다 |
 
 **생사 판정용 엔드포인트는 없다.** 2026-09-19 에 `GET /api/battle/health` 를 지웠다 — 꺼져 있는 기능 밑에 앱 전체 판정이 들어가 있었다. 떠 있는지 봐야 하는 자리(`verify.sh`·`dev-up.sh`·`e2e/backend.spec.ts`·배포 워크플로)는 `GET /api/jobs` 를 두들긴다. 사람인 키가 없으면 외부를 안 부르고 바로 `200` 에 `error` 필드를 실어 주므로 값이 싸다. **키를 넣으면 이 호출이 사람인·카카오까지 가서 느려진다** — 그때는 판정 대상을 다시 고른다.
-
-영속화하는 데이터가 없다. 전부 매 요청 외부 호출이다.
 
 ## 환경변수
 
@@ -35,8 +37,12 @@ com/portfolio/
 | `youtube.api.key` | 유튜브 댓글·답글 |
 | `kakao.rest.key` | Kakao Local REST 서버사이드 호출 |
 | `saramin.access.key` | 채용정보 |
+| `spring.datasource.url`·`username`·`password` | 청약 공고 저장소. 비면 기동이 실패한다 |
+| `data.go.kr.key` | 청약홈 분양정보 API. 공공데이터포털 일반 인증키 **Decoding** |
+| `cheongyak.collect.token` | 수집 입구 보호 토큰. 비면 수집 입구가 503 |
+| `cheongyak.doc.batch-size` | 실행 한 번에 받는 공고문 수(기본 150, 1초 간격) |
 
-과거에 쓰던 `polygon.api.key`·`spring.datasource.*`(주가 캐시용 Postgres)는 제거됐으니 다시 넣지 않는다.
+과거에 쓰던 `polygon.api.key` 는 다시 넣지 않는다.
 
 ## 로컬 실행
 
@@ -46,9 +52,24 @@ cp src/main/resources/application.properties.template src/main/resources/applica
 mvn spring-boot:run       # localhost:8080
 ```
 
+datasource 세 줄을 채워야 뜬다. 로컬은 Docker Postgres 를 쓴다(한 번만 만들고, 재부팅 뒤엔 `docker start cheongyak-pg`).
+
+```bash
+docker run -d --name cheongyak-pg --memory 512m --restart unless-stopped \
+  -e POSTGRES_USER=cheongyak -e POSTGRES_PASSWORD=cheongyak -e POSTGRES_DB=cheongyak \
+  -p 127.0.0.1:5434:5432 postgres:18-alpine
+```
+```properties
+spring.datasource.url=jdbc:postgresql://127.0.0.1:5434/cheongyak
+spring.datasource.username=cheongyak
+spring.datasource.password=cheongyak
+```
+
 ## 검증
 
 테스트는 `src/test/java/com/portfolio/` 에 있다. 컨트롤러는 `@WebMvcTest` 로 서비스를 가짜로 바꿔 띄우므로 API 키 없이 돈다. `PortfolioApplicationTests` 는 컨텍스트만 세워 빈 주입·설정 오류를 잡고, `WebConfigCorsTest` 는 프리플라이트로 허용 오리진을 확인한다.
+
+테스트 DB 는 H2(PostgreSQL 모드) 메모리다(`src/test/resources/application-test.properties`, `@ActiveProfiles("test")`). 그래서 Flyway SQL 은 H2 와 Postgres 양쪽에서 도는 것만 쓴다 — `ON CONFLICT … DO UPDATE`·JSONB·`::` 캐스트는 H2 PG 모드가 거부한다.
 
 서비스 계층은 가짜 HTTP 서버로 돌린다(`src/test/java/com/portfolio/service/StubServer.java`, JDK 의 `HttpServer` 라 의존성이 안 는다). 진짜 유튜브·사람인·모델 API 를 부르면 키가 있어야 하고 할당량과 상대 쪽 사정에 결과가 흔들린다. 그래서 각 서비스의 주소를 속성으로 뺐다 — `youtube.api.base-url`·`saramin.api.url`·`kakao.keyword.url`·`anthropic.api.url` 이고, 안 주면 진짜 주소가 기본값이다.
 
@@ -77,7 +98,7 @@ $env:JAVA_HOME='C:\Program Files\Java\jdk-17.0.19'; .\mvnw.cmd -B test
 | 명령 | 무엇을 확인하나 |
 |---|---|
 | `./mvnw -B compile` | 컴파일 통과 여부. 가장 싸다 |
-| `./mvnw -B test` | 컴파일 + 컨텍스트 기동 + API 계약·서비스 로직 58건. **자바 코드 수정 후 필수** |
+| `./mvnw -B test` | 컴파일 + 컨텍스트 기동 + API 계약·서비스 로직·청약 저장소·판정 규칙 142건. **자바 코드 수정 후 필수** |
 | `./mvnw -B checkstyle:check` | 선언 순서(static → 인스턴스 → 생성자 → 메서드). 설정은 `checkstyle.xml`. 빌드 단계에 안 묶여 Railway 빌드에선 안 돈다 |
 | `./mvnw -B package` | jar 생성까지. 배포 형태 확인 |
 | `./mvnw -B spring-boot:run` | 실제 기동. `application.properties`에 키가 채워져 있어야 한다 |
