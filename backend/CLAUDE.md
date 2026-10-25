@@ -98,7 +98,7 @@ $env:JAVA_HOME='C:\Program Files\Java\jdk-17.0.19'; .\mvnw.cmd -B test
 | 명령 | 무엇을 확인하나 |
 |---|---|
 | `./mvnw -B compile` | 컴파일 통과 여부. 가장 싸다 |
-| `./mvnw -B test` | 컴파일 + 컨텍스트 기동 + API 계약·서비스 로직·청약 저장소·판정 규칙 141건. **자바 코드 수정 후 필수** |
+| `./mvnw -B test` | 컴파일 + 컨텍스트 기동 + API 계약·서비스 로직·청약 저장소·판정 규칙 142건. **자바 코드 수정 후 필수** |
 | `./mvnw -B checkstyle:check` | 선언 순서(static → 인스턴스 → 생성자 → 메서드). 설정은 `checkstyle.xml`. 빌드 단계에 안 묶여 Railway 빌드에선 안 돈다 |
 | `./mvnw -B package` | jar 생성까지. 배포 형태 확인 |
 | `./mvnw -B spring-boot:run` | 실제 기동. `application.properties`에 키가 채워져 있어야 한다 |

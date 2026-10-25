@@ -84,6 +84,14 @@ class NoticeDocExtractorTest {
     }
 
     @Test
+    @DisplayName("가점제 비율이 5% 단위가 아니면(전용면적이 잘못 걸림) 버린다")
+    void pointShareRejectsAreas() {
+        NoticeDoc d = NoticeDocExtractor.extract("APT", "구분 가점제 추첨제 전용면적 60㎡ 초과 85㎡ 이하 84 전용면적 85㎡ 초과 93");
+        assertThat(d.pointLe85()).isNull();
+        assertThat(d.pointGt85()).isNull();
+    }
+
+    @Test
     @DisplayName("표가 없는 공고문(LH 형식) — 값은 전부 null, 받은 것 자체는 OK")
     void noTable() {
         NoticeDoc d = NoticeDocExtractor.extract("APT", "공급위치 서울특별시 강서구 마곡동 일원 공급규모 100세대");

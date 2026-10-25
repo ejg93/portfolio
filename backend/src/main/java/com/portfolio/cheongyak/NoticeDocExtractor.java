@@ -129,6 +129,11 @@ public final class NoticeDocExtractor {
         if (!m.find()) {
             return null;
         }
-        return "-".equals(m.group(1)) ? 0 : Integer.parseInt(m.group(1));
+        if ("-".equals(m.group(1))) {
+            return 0;
+        }
+        // 비율은 5% 단위다. 84·93 처럼 전용면적이 잘못 걸리는 공고가 있다(실측 계양 카이브 유보라)
+        int v = Integer.parseInt(m.group(1));
+        return v <= 100 && v % 5 == 0 ? v : null;
     }
 }
