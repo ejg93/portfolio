@@ -2,6 +2,7 @@ package com.portfolio.cheongyak;
 
 import lombok.Builder;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 
@@ -9,6 +10,7 @@ import java.time.LocalDateTime;
  * 청약 공고 한 건. 필드는 V1 의 cheongyak_notice 컬럼과 1:1 이다(스네이크 → 카멜).
  * null 이 올 수 있는 컬럼은 전부 래퍼 타입이다 — 원시 타입에 null 이 오면 행 매핑이 터진다.
  * doc_* 는 공고문 PDF 에서 뽑은 값이고, 아직 못 받았으면 docStatus 까지 null 이다.
+ * result_*·geo_* 이하는 V2 컬럼이다. 수집 뒤 단계가 채우고, raw 가 바뀌어도 되돌리지 않는다.
  */
 @Builder(toBuilder = true)
 public record Notice(
@@ -72,7 +74,17 @@ public record Notice(
         LocalDateTime docFetchedAt,
         String rawJson,
         LocalDateTime firstSeenAt,
-        LocalDateTime updatedAt
+        LocalDateTime updatedAt,
+        String resultStatus,
+        LocalDateTime resultFetchedAt,
+        String geoStatus,
+        String lawdCd,
+        String bcode,
+        String umdNm,
+        BigDecimal lat,
+        BigDecimal lng,
+        String geoAddress,
+        LocalDateTime geoAt
 ) {
 
     /** 공고 키. 주택형 묶음의 map key 로도 쓴다 */

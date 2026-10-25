@@ -27,6 +27,7 @@ import java.util.stream.Collectors;
 
 /**
  * 한국부동산원 청약홈 분양정보 조회 서비스(odcloud). 공고 상세는 페이지를 넘기며 다 받고, 주택형은 공고마다 한 번 부른다.
+ * 같은 키로 경쟁률 서비스(ApplyhomeInfoCmpetRtSvc)의 경쟁률·당첨가점도 공고마다 한 번 부른다.
  * 키는 Decoding 키를 받아 한 번만 URL 인코딩한다 — Encoding 키를 넣으면 이중 인코딩으로 인증이 깨진다.
  */
 @Slf4j
@@ -46,6 +47,9 @@ public class ApplyhomeClient {
     @Value("${cheongyak.applyhome.base-url:https://api.odcloud.kr/api/ApplyhomeInfoDetailSvc/v1}")
     private String baseUrl;
 
+    @Value("${cheongyak.cmpet.base-url:https://api.odcloud.kr/api/ApplyhomeInfoCmpetRtSvc/v1}")
+    private String cmpetBaseUrl;
+
     private final ObjectMapper mapper = new ObjectMapper();
     private final HttpClient httpClient = HttpClient.newBuilder().connectTimeout(CONNECT_TIMEOUT).build();
     private final AtomicInteger calls = new AtomicInteger();
@@ -55,7 +59,7 @@ public class ApplyhomeClient {
         Map<String, String> cond = Map.of("cond[RCRIT_PBLANC_DE::GTE]", since.format(kind.dateFormat()));
         List<JsonNode> out = new ArrayList<>();
         for (int page = 1; page <= MAX_PAGES; page++) {
-            JsonNode body = call(kind.detailOp(), cond, page);
+            JsonNode body = call(baseUrl, kind.detailOp(), cond, page);
             JsonNode data = body.path("data");
             data.forEach(out::add);
             if (body.path("currentCount").asInt(data.size()) < PER_PAGE) {
@@ -68,8 +72,23 @@ public class ApplyhomeClient {
     /** 공고 하나의 주택형. 한 공고에 100형을 넘는 경우는 없다 */
     public List<JsonNode> fetchHouseTypes(ApplyhomeKind kind, String pblancNo) {
         List<JsonNode> out = new ArrayList<>();
-        call(kind.modelOp(), Map.of("cond[PBLANC_NO::EQ]", pblancNo), 1).path("data").forEach(out::add);
+        call(baseUrl, kind.modelOp(), Map.of("cond[PBLANC_NO::EQ]", pblancNo), 1).path("data").forEach(out::add);
         return out;
+    }
+
+    /** 공고 하나의 경쟁률. APT·무순위만. 한 공고의 줄(주택형 × 순위 × 거주)이 100을 넘는 경우는 없다 */
+    public List<JsonNode> fetchCmpet(ApplyhomeKind kind, String hmn, String pno) {
+        String op = switch (kind) {
+            case APT -> "getAPTLttotPblancCmpet";
+            case REMNDR -> "getRemndrLttotPblancCmpet";
+            default -> throw new IllegalArgumentException("경쟁률은 APT·무순위만 받는다: " + kind);
+        };
+        return rows(op, hmn, pno);
+    }
+
+    /** APT 공고 하나의 당첨가점 */
+    public List<JsonNode> fetchScores(String hmn, String pno) {
+        return rows("getAptLttotPblancScore", hmn, pno);
     }
 
     /** 이번 실행에서 부른 횟수. 수집 이력에 남긴다 */
@@ -81,7 +100,16 @@ public class ApplyhomeClient {
         calls.set(0);
     }
 
-    private JsonNode call(String op, Map<String, String> cond, int page) {
+    private List<JsonNode> rows(String op, String hmn, String pno) {
+        Map<String, String> cond = new LinkedHashMap<>();
+        cond.put("cond[HOUSE_MANAGE_NO::EQ]", hmn);
+        cond.put("cond[PBLANC_NO::EQ]", pno);
+        List<JsonNode> out = new ArrayList<>();
+        call(cmpetBaseUrl, op, cond, 1).path("data").forEach(out::add);
+        return out;
+    }
+
+    private JsonNode call(String base, String op, Map<String, String> cond, int page) {
         if (serviceKey == null || serviceKey.isBlank()) {
             throw new UpstreamException(HttpStatus.SERVICE_UNAVAILABLE, "KEY_NOT_SET", "DATA_GO_KR_KEY 가 없다");
         }
@@ -93,7 +121,7 @@ public class ApplyhomeClient {
         String query = q.entrySet().stream()
                 .map(e -> enc(e.getKey()) + "=" + enc(e.getValue()))
                 .collect(Collectors.joining("&"));
-        HttpRequest req = HttpRequest.newBuilder(URI.create(baseUrl + "/" + op + "?" + query))
+        HttpRequest req = HttpRequest.newBuilder(URI.create(base + "/" + op + "?" + query))
                 .timeout(READ_TIMEOUT).header("Accept", "application/json").GET().build();
         calls.incrementAndGet();
         HttpResponse<String> res;

@@ -11,6 +11,7 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -24,6 +25,9 @@ public class CheongyakQueryService {
 
     public static final int DEFAULT_DAYS = 90;
     private static final int MAX_NOTICES = 500;
+    // 가점 참고치: 최근 1년 공고, 주택형 3개 이상 모여야 중앙값을 낸다
+    private static final int REF_DAYS = 365;
+    private static final int REF_MIN = 3;
 
     private final NoticeRepository repo;
 
@@ -31,7 +35,45 @@ public class CheongyakQueryService {
     public List<NoticeView> notices(LocalDate from, LocalDate to, String area, Set<String> kinds) {
         List<Notice> found = find(from, to, area, kinds);
         Map<String, List<HouseType>> types = repo.findHouseTypes(found);
-        return found.stream().map(n -> NoticeView.of(n, types.getOrDefault(n.key(), List.of()))).toList();
+        Map<String, List<CmpetRow>> cmpet = repo.findCmpet(found);
+        Map<String, List<ScoreRow>> scores = repo.findScores(found);
+        LocalDate today = NoticeRepository.now().toLocalDate();
+        RefIndex ref = refIndex(today);
+        return found.stream().map(n -> NoticeView.of(n, types.getOrDefault(n.key(), List.of()),
+                cmpet.getOrDefault(n.key(), List.of()), scores.getOrDefault(n.key(), List.of()),
+                awaitingResult(n, today) ? ref.of(n) : null)).toList();
+    }
+
+    /** 발표 전 APT 민영. 참고치를 붙일 공고 */
+    static boolean awaitingResult(Notice n, LocalDate today) {
+        return "APT".equals(n.kind()) && "01".equals(n.houseSecd()) && "01".equals(n.houseDtlSecd())
+                && n.resultStatus() == null && (n.przwnerDe() == null || !n.przwnerDe().isBefore(today));
+    }
+
+    private RefIndex refIndex(LocalDate today) {
+        Map<String, List<Long>> byLawd = new HashMap<>();
+        Map<String, List<Long>> byArea = new HashMap<>();
+        for (ScoreSample s : repo.scoreSamples(today.minusDays(REF_DAYS))) {
+            if (s.lawdCd() != null) {
+                byLawd.computeIfAbsent(s.lawdCd(), k -> new ArrayList<>()).add(s.minScore().longValue());
+            }
+            if (s.areaNm() != null) {
+                byArea.computeIfAbsent(s.areaNm(), k -> new ArrayList<>()).add(s.minScore().longValue());
+            }
+        }
+        return new RefIndex(byLawd, byArea);
+    }
+
+    /** 시군구에 표본이 모이면 시군구, 아니면 시도 */
+    private record RefIndex(Map<String, List<Long>> byLawd, Map<String, List<Long>> byArea) {
+        NoticeView.RefScore of(Notice n) {
+            List<Long> l = n.lawdCd() == null ? List.of() : byLawd.getOrDefault(n.lawdCd(), List.of());
+            if (l.size() >= REF_MIN) {
+                return new NoticeView.RefScore(MarketPricer.median(l).intValue(), l.size(), "LAWD");
+            }
+            List<Long> a = n.areaNm() == null ? List.of() : byArea.getOrDefault(n.areaNm(), List.of());
+            return a.size() >= REF_MIN ? new NoticeView.RefScore(MarketPricer.median(a).intValue(), a.size(), "AREA") : null;
+        }
     }
 
     public JudgeResponse judge(JudgeRequest req) {
