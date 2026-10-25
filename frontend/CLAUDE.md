@@ -12,6 +12,7 @@ components/   AppShell.tsx — 테마 토글·사이드바를 쥔 껍데기(클�
               Sidebar.tsx — 전 페이지 공통 좌측 내비
               CaseStudy.tsx — 설계 기록 페이지 공통 카드·섹션 스타일
 lib/api.ts    백엔드 베이스 URL·공개 키 상수 중앙 관리
+lib/clientStore.ts  localStorage·미디어쿼리 훅(useStoredFlag·useStoredJson·useMediaQuery·useHydrated)
 lib/github.ts ProjectShop 저장소 숫자·최근 커밋을 GitHub API 로 받아온다
 ```
 
@@ -25,6 +26,7 @@ lib/github.ts ProjectShop 저장소 숫자·최근 커밋을 GitHub API 로 받�
 | `/about` | - | 소개 |
 | `/youtube` | `GET /api/youtube/{comments,replies}` | 유튜브 댓글 뷰어 |
 | `/public-data` | `GET /api/jobs` | 채용정보 목록 + 지도. Sidebar·홈에 없고 URL 직접 접근만 된다 |
+| `/cheongyak` | `GET /api/cheongyak/{notices,runs,rules}`·`POST /api/cheongyak/judge` | 청약 공고 판정(LAB). 내 조건 → 수도권 공고 카드별 1순위·2순위·불가와 근거. 판정은 서버 규칙 엔진 응답을 그대로 그린다. 조건·검색 칩은 localStorage `cheongyak-slots`(슬롯 5개)·`cheongyak-last-slot` 에만 둔다 |
 | `/projectshop` | - | 별도 저장소 [ProjectShop](https://github.com/ejg93/ProjectShop) 소개. 설계 결정·작업 방식·CI 체계를 정리한 화면. 숫자와 최근 커밋은 `lib/github.ts` 가 GitHub API 로 받아온다(ISR 15분). 호출이 실패하면 `page.tsx` 의 `FALLBACK` 배열로 떨어진다 |
 | `/workflow` | - | 작업 방식 소개. 세션 뼈대·강제 지점 여섯·chunkframe 템플릿. 막힐 때 찍히는 메시지는 `workflow/quotes.ts` 에 원문 그대로 둔다(줄바꿈 규칙 6의 대상이 아니다) |
 | `/toolbox` | - | 폐쇄망 단일 파일 도구 소개. 카드 목록은 `public/toolbox/toolbox.html` 의 런처 배열을 빌드 때 읽어 만든다. 도구 본체는 `/tools/:path*` rewrite 로 연다 |
@@ -87,7 +89,7 @@ npm run dev               # localhost:3000
 | `npm run lint` | `useEffect` 의존성 누락, 이펙트 안 setState 등 실수 패턴 | 컴포넌트·훅 수정 후 |
 | `npm run build` | 정적 생성·설정 오류. **lint 는 안 돈다**(Next 16) | **커밋 전 최소 1회** |
 | `npm audit --omit=dev` | 배포본에 실리는 의존성의 취약점 | 의존성 추가·변경 후 |
-| `npm run e2e` | 라우트 9개와 public/ 정적 HTML 10장을 크로미엄으로 열어 콘솔 에러·죽은 내부 링크·접근성 위반·폰 폭 가로 넘침 | 화면 문구·색·레이아웃을 고친 뒤 |
+| `npm run e2e` | 라우트 10개와 public/ 정적 HTML 10장을 크로미엄으로 열어 콘솔 에러·죽은 내부 링크·접근성 위반·폰 폭 가로 넘침 | 화면 문구·색·레이아웃을 고친 뒤 |
 
 `verify.sh` 의 빌드는 `NEXT_DIST_DIR=.next-verify` 로 딴 폴더에 쓴다 — dev 서버가 쓰는 `.next` 를 갈아엎으면 `GET / 500` 이 난다. 손으로 돌릴 때도 dev 가 떠 있으면 그 변수를 붙인다.
 

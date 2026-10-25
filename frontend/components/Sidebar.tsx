@@ -15,6 +15,7 @@ const menus = [
 
 // 리뷰어 동선에서 빠지는 것. 아래 LAB 묶음으로 내린다
 const labMenus = [
+  { label: 'CHEONGYAK',    href: '/cheongyak',   icon: '⌂', desc: '공공데이터 배치' },
   { label: 'DEV LOG',      href: '/board',       icon: '✍', desc: '기록' },
   { label: 'YT COMMENTS',  href: '/youtube',     icon: '▶', desc: '실험' },
 ]

@@ -27,7 +27,7 @@
 | 무엇이 바뀌면 | 무엇을 돌리나 |
 |---|---|
 | `frontend/app`·`components`·`lib`, 빌드 설정 | `npm run typecheck` · `npm run build`(lint 포함) |
-| 위에 더해 `frontend/public/` 의 study·game·docrules·jobhunt·toolbox, `frontend/e2e/` | `npm run e2e` — 라우트 9개와 정적 HTML 10장을 크로미엄으로 연다 |
+| 위에 더해 `frontend/public/` 의 study·game·docrules·jobhunt·toolbox, `frontend/e2e/` | `npm run e2e` — 라우트 10개와 정적 HTML 10장을 크로미엄으로 연다 |
 | `backend/src`·`pom.xml`·`checkstyle.xml` | JDK 17 로 `./mvnw test checkstyle:check`(선언 순서) |
 
 e2e 는 방금 만든 `.next-verify` 빌드를 그대로 띄워서 같은 산출물을 두 번 만들지 않는다.
@@ -38,7 +38,7 @@ e2e 는 방금 만든 `.next-verify` 빌드를 그대로 띄워서 같은 산출
 
 `verify.sh` 가 초록이면 작업트리 지문을 `.git/verify-stamp` 에 남긴다. **`git push` 는 그 도장이 지금 트리와 같아야 나간다** — 다르면 hook 이 막는다(`hook-push-gate.sh`). 도장을 찍는 쪽이 검증이고, push 는 확인만 한다.
 
-hook 은 이 기계에서만 돈다. 다른 기계나 웹에서 올라온 커밋은 hook 을 안 거치므로 `.github/workflows/verify.yml` 이 push·PR 마다 같은 검사를 다시 돌린다 — frontend typecheck·build, e2e(라우트 9개 실사용 검사), 글 규칙·줄바꿈·경로 lint, backend compile.
+hook 은 이 기계에서만 돈다. 다른 기계나 웹에서 올라온 커밋은 hook 을 안 거치므로 `.github/workflows/verify.yml` 이 push·PR 마다 같은 검사를 다시 돌린다 — frontend typecheck·build, e2e(라우트 10개 실사용 검사), 글 규칙·줄바꿈·경로 lint, backend compile.
 
 돌리지 못했으면 못 돌렸다고 밝힌다. 안 돌려보고 "동작한다"·"빌드 통과"라고 쓰지 않는다. 일부만 확인했으면 확인한 범위와 못 한 범위를 나눠서 적는다.
 

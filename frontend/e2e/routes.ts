@@ -9,6 +9,7 @@ export const ROUTES = [
   '/board',
   '/youtube',
   '/public-data',
+  '/cheongyak',
   '/about',
 ] as const
 
