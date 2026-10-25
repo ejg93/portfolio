@@ -8,7 +8,7 @@
 
 | 문서 | 무엇을 답하나 | 언제 여나 |
 |---|---|---|
-| [backend/external-apis.md](backend/external-apis.md) | 외부 API 4종의 엔드포인트·인증 방식·쿼터·정식 문서 링크 | 외부 API 요청·응답을 바꿀 때 |
+| [backend/external-apis.md](backend/external-apis.md) | 외부 API 5종의 엔드포인트·인증 방식·쿼터·정식 문서 링크 | 외부 API 요청·응답을 바꿀 때 |
 | [backend/cheongyak-rule-audit.md](backend/cheongyak-rule-audit.md) | 청약 공고문 조건이 API·법령·공고문 중 어디서 판정되는지 실측(2026-10) | 청약 판정 규칙을 바꿀 때 |
 | [frontend/kakao-maps-sdk.md](frontend/kakao-maps-sdk.md) | Kakao Maps JS SDK 로딩 방식과 JS 키·REST 키 구분 | `/public-data` 지도를 바꿀 때 |
 | [deployment.md](deployment.md) | Vercel·Railway 설정, 환경변수 등록 위치, 배포 체크리스트 | 배포 설정·환경변수를 바꿀 때 |

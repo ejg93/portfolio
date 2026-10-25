@@ -42,7 +42,11 @@ GitHub(main push)
 
 - 컨테이너 기반 PaaS. Java/Maven 프로젝트를 감지해 자동 빌드(Nixpacks) 후 실행
 - 이 프로젝트 설정: 서비스 루트를 `backend/`로 지정
-- 환경변수: `application.properties`의 `${...}` 자리표시자들이 Railway Variables에서 주입됨 (ANTHROPIC/YOUTUBE/KAKAO/SARAMIN 키. POLYGON·`spring.datasource.*`와 Postgres 플러그인은 주가 기능과 함께 제거된 잔재 — 콘솔에서 지운다)
+- 환경변수: Railway Variables 가 relaxed binding 으로 속성에 들어간다(`DATA_GO_KR_KEY` → `data.go.kr.key`). ANTHROPIC/YOUTUBE/KAKAO/SARAMIN 키, 그리고 청약 알리미의 다섯:
+    - `SPRING_DATASOURCE_URL` = `jdbc:postgresql://${{Postgres.PGHOST}}:${{Postgres.PGPORT}}/${{Postgres.PGDATABASE}}`, `SPRING_DATASOURCE_USERNAME` = `${{Postgres.PGUSER}}`, `SPRING_DATASOURCE_PASSWORD` = `${{Postgres.PGPASSWORD}}` — 같은 프로젝트 `Postgres` 서비스를 내부망으로 참조한다
+    - `DATA_GO_KR_KEY` — 공공데이터포털 일반 인증키(Decoding)
+    - `CHEONGYAK_COLLECT_TOKEN` — 수집 입구 보호 토큰. GitHub Secrets 에도 같은 값(`collect-cheongyak.yml` 이 헤더로 보낸다)
+- DB: 같은 프로젝트의 `Postgres` 서비스. Flyway 가 기동 때 `db/migration` 을 적용한다. TCP Proxy(Public Access)는 꺼 둔다 — 백엔드는 내부망으로 붙는다
 - 대시보드: https://railway.com/dashboard
 - 정식 문서:
     - Railway 문서 홈: https://docs.railway.com/
@@ -55,3 +59,5 @@ GitHub(main push)
 2. 새 환경변수 추가 시: Vercel/Railway 양쪽 콘솔에도 등록 + 루트 `CLAUDE.md` 표 갱신
 3. 백엔드 URL 변경 시: Vercel의 `NEXT_PUBLIC_SPRING_URL` 갱신 후 프론트 재배포 (빌드 시점 박제이므로)
 4. CORS 오류 발생 시: `WebConfig.java`의 허용 origin에 프론트 도메인 포함됐는지 확인
+5. datasource 변수 없이 배포하면 기동이 실패해 배포 확인(`/api/jobs`)이 빨갛게 된다
+6. Postgres 의 TCP Proxy 가 켜져 있으면 끈다
