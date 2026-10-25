@@ -23,7 +23,23 @@ export type HouseTypeView = {
   suplyHshldco: number | null
   spsplyHshldco: number | null
   topAmount: number | null
+  /** 실거래 시세 중앙값(만원). 같은 동(DONG) 또는 시군구(SGG) 신축 ±5㎡ 최근 12개월. 표본 모자라면 null */
+  mktMedian: number | null
+  mktCount: number | null
+  mktBasis: 'DONG' | 'SGG' | null
 }
+
+export type Cmpet = {
+  houseTy: string
+  resideNm: string
+  rankCode: number
+  suplyHshldco: number | null
+  reqCnt: number | null
+  cmpetRate: number | null
+  cmpetText: string | null
+}
+
+export type Score = { houseTy: string; resideNm: string; minScore: number | null; maxScore: number | null; avgScore: number | null }
 
 export type NoticeView = {
   houseManageNo: string
@@ -47,6 +63,17 @@ export type NoticeView = {
   pblancUrl: string | null
   doc: Doc
   houseTypes: HouseTypeView[]
+  firstSeenAt: string
+  resultStatus: string | null
+  cmpet: Cmpet[]
+  scores: Score[]
+  /** 1순위 해당지역 최고 경쟁률(무순위는 전체 최고) */
+  topRate: number | null
+  /** 해당지역 주택형 가운데 가장 낮은 최저 당첨가점 */
+  minScore: number | null
+  /** 발표 전 APT 민영: 같은 시군구(LAWD)·시도(AREA) 최근 1년 최저 당첨가점 중앙값 */
+  refScore: { median: number; count: number; basis: 'LAWD' | 'AREA' } | null
+  geo: { lawdCd: string; umdNm: string | null; lat: number | null; lng: number | null } | null
 }
 
 export type Reason = {
@@ -87,6 +114,15 @@ export type CollectRun = {
   docFetched: number
   docOk: number
   docPending: number
+  resultFetched: number
+  resultOk: number
+  resultPending: number
+  geoFetched: number
+  geoOk: number
+  geoPending: number
+  rtmsCalls: number
+  rtmsPending: number
+  mktUpdated: number
   errorMessage: string | null
 }
 
