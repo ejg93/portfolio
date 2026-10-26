@@ -46,7 +46,7 @@ GitHub(main push)
     - `SPRING_DATASOURCE_URL` = `jdbc:postgresql://${{Postgres.PGHOST}}:${{Postgres.PGPORT}}/${{Postgres.PGDATABASE}}`, `SPRING_DATASOURCE_USERNAME` = `${{Postgres.PGUSER}}`, `SPRING_DATASOURCE_PASSWORD` = `${{Postgres.PGPASSWORD}}` — 같은 프로젝트 `Postgres` 서비스를 내부망으로 참조한다
     - `DATA_GO_KR_KEY` — 공공데이터포털 일반 인증키(Decoding)
     - `CHEONGYAK_COLLECT_TOKEN` — 수집 입구 보호 토큰. GitHub Secrets 에도 같은 값(`collect-cheongyak.yml` 이 헤더로 보낸다)
-    - `KAKAO_REST_KEY` — 청약 공고 지오코딩에도 쓴다. 없으면 수집이 지오코딩·실거래·시세 단계를 건너뛴다
+    - `JUSO_KEY` — 행정안전부 도로명주소 검색 API 승인키(청약 공고 지오코딩). 없으면 수집이 지오코딩·실거래·시세 단계를 건너뛴다
 - DB: 같은 프로젝트의 `Postgres` 서비스. Flyway 가 기동 때 `db/migration` 을 적용한다. TCP Proxy(Public Access)는 꺼 둔다 — 백엔드는 내부망으로 붙는다
 - 대시보드: https://railway.com/dashboard
 - 정식 문서:

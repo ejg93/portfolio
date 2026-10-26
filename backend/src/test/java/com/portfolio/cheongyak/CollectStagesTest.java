@@ -60,7 +60,7 @@ class CollectStagesTest {
     private NoticeDocClient docClient;
 
     @MockitoBean
-    private KakaoGeoClient geoClient;
+    private JusoGeoClient geoClient;
 
     @MockitoBean
     private RtmsClient rtmsClient;
@@ -146,7 +146,7 @@ class CollectStagesTest {
         when(client.fetchCmpet(any(), anyString(), anyString()))
                 .thenThrow(new UpstreamException(HttpStatus.BAD_GATEWAY, "UPSTREAM_ERROR", "x"));
         when(geoClient.enabled()).thenReturn(true);
-        when(geoClient.geocode(anyString(), anyString())).thenReturn(Optional.empty());
+        when(geoClient.geocode(anyString())).thenReturn(Optional.empty());
 
         CollectRun r = run();
 
@@ -160,9 +160,9 @@ class CollectStagesTest {
         repo.upsertNotice(Fixtures.apt("A1").address("경기도 화성시 반송동 95").build());
         repo.upsertNotice(Fixtures.apt("A2").address("어딘가").build());
         when(geoClient.enabled()).thenReturn(true);
-        when(geoClient.geocode(eq("경기도 화성시 반송동 95"), anyString()))
+        when(geoClient.geocode(eq("경기도 화성시 반송동 95")))
                 .thenReturn(Optional.of(new Geo("41597", "4159710800", "반송동", BigDecimal.ONE, BigDecimal.ONE, "a")));
-        when(geoClient.geocode(eq("어딘가"), anyString())).thenReturn(Optional.empty());
+        when(geoClient.geocode(eq("어딘가"))).thenReturn(Optional.empty());
 
         CollectRun r = run();
 
@@ -179,7 +179,7 @@ class CollectStagesTest {
 
         CollectRun r = run();
 
-        verify(geoClient, never()).geocode(anyString(), anyString());
+        verify(geoClient, never()).geocode(anyString());
         assertThat(r).extracting(CollectRun::geoFetched, CollectRun::geoPending).containsExactly(0, 1);
     }
 

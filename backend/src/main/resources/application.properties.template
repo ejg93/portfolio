@@ -8,6 +8,8 @@ youtube.api.key=YOUR_YOUTUBE_API_KEY
 
 # --- 선택 (미설정 시 해당 기능만 비활성) ---
 kakao.rest.key=
+# 청약 공고 지오코딩(행정안전부 도로명주소 검색 API 승인키). 비면 지오코딩·실거래·시세 단계를 건너뛴다
+juso.key=
 saramin.access.key=
 
 # AI 배틀 API. 인증이 없어서 켜 두면 아무나 호출해 모델 요금이 나간다
@@ -31,7 +33,7 @@ cheongyak.doc.batch-size=150
 cheongyak.result.batch-size=150
 cheongyak.geo.batch-size=200
 cheongyak.rtms.batch-size=300
-# 시세 표본: 최근 N개월 실거래, 준공 N년 이내, 전용 ±N㎡. 지오코딩은 위 kakao.rest.key 를 쓴다(비면 건너뜀)
+# 시세 표본: 최근 N개월 실거래, 준공 N년 이내, 전용 ±N㎡.
 cheongyak.rtms.months=12
 cheongyak.market.build-years=5
 cheongyak.market.area-tolerance=5

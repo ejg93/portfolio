@@ -52,7 +52,7 @@ public class CollectService {
     // 이번 달·지난달 실거래는 신고가 계속 들어오니 이 간격으로 다시 받는다
     private static final int MONTH_REFRESH_DAYS = 7;
     private static final long GAP_ODCLOUD_MS = 200;
-    private static final long GAP_KAKAO_MS = 100;
+    private static final long GAP_GEO_MS = 100;
     private static final long GAP_RTMS_MS = 300;
     private static final String RESULT_OK = "OK";
     private static final String RESULT_NONE = "NONE";
@@ -63,7 +63,7 @@ public class CollectService {
     private final NoticeRepository repo;
     private final ApplyhomeClient client;
     private final NoticeDocClient docClient;
-    private final KakaoGeoClient geoClient;
+    private final JusoGeoClient geoClient;
     private final RtmsClient rtmsClient;
 
     // 실행 한 번에 받는 공고문 수. 청약홈에 1초 간격이라 150건이면 5분 남짓
@@ -223,15 +223,15 @@ public class CollectService {
         b.resultFetched(fetched).resultOk(ok).resultPending(repo.countResultPending(today, since));
     }
 
-    /** 공고 주소 → 법정동코드·좌표. 카카오 키가 없으면 건너뛴다 */
+    /** 공고 주소 → 법정동코드. 도로명주소 승인키가 없으면 건너뛴다 */
     private void geocode(long id, CollectRun.CollectRunBuilder b) {
         int fetched = 0;
         int ok = 0;
         if (geoClient.enabled()) {
             try {
                 for (Notice n : repo.geoTargets(geoBatch)) {
-                    Optional<Geo> g = geoClient.geocode(n.address(), n.houseNm());
-                    pause(GAP_KAKAO_MS);
+                    Optional<Geo> g = geoClient.geocode(n.address());
+                    pause(GAP_GEO_MS);
                     repo.updateGeo(n.houseManageNo(), n.pblancNo(), g.orElse(null), g.isPresent() ? GEO_OK : GEO_FAIL);
                     fetched++;
                     ok += g.isPresent() ? 1 : 0;
