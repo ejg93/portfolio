@@ -9,7 +9,7 @@ com/portfolio/
 ├── controller/   REST 엔드포인트
 ├── service/      외부 API 호출·비즈니스 로직
 ├── dto/          요청/응답 객체
-└── cheongyak/    청약 공고 수집·공고문 추출·조회(한 패키지). rules/ 는 판정 규칙(Spring 의존 없음)
+└── cheongyak/    청약 공고 수집·공고문 추출·경쟁률·실거래 시세·조회(한 패키지). rules/ 는 판정 규칙(Spring 의존 없음)
 ```
 
 외부 API 호출은 전부 `service/`에서 한다. 컨트롤러는 요청 검증과 응답 변환만 맡는다. CORS 설정은 `WebConfig.java`에 있다.
@@ -21,7 +21,7 @@ com/portfolio/
 | `POST /api/battle/chat` | `BattleController` / `BattleService` | Anthropic Claude API |
 | `GET /api/youtube/{comments,replies}` | `YoutubeController` / `YoutubeService` | YouTube Data API v3 |
 | `GET /api/jobs` | `JobController` / `JobService` | 사람인 오픈 API + Kakao Local(주소→좌표) |
-| `POST /api/cheongyak/collect` | `CollectController` / `CollectService` | 청약홈 분양정보 API + 청약홈 공고문 첨부. `X-Collect-Token` 필요, 202 로 바로 돌려주고 작업 스레드에서 수집 |
+| `POST /api/cheongyak/collect` | `CollectController` / `CollectService` | 청약홈 분양정보·경쟁률 API, 청약홈 공고문 첨부, 도로명주소 검색 API, 국토부 실거래 API. `X-Collect-Token` 필요, 202 로 바로 돌려주고 작업 스레드에서 수집 |
 | `GET /api/cheongyak/{notices,runs,runs/{id},rules}` | `CheongyakController` / `CheongyakQueryService` | 없음(Postgres) |
 | `POST /api/cheongyak/judge` | `CheongyakController` / `rules/Judge` | 없음. 요청 본문(신청자 조건)은 로그·DB 에 안 남긴다 |
 
@@ -35,12 +35,15 @@ com/portfolio/
 |---|---|
 | `anthropic.api.key` | AI 배틀 |
 | `youtube.api.key` | 유튜브 댓글·답글 |
-| `kakao.rest.key` | Kakao Local REST 서버사이드 호출 |
+| `kakao.rest.key` | Kakao Local REST 서버사이드 호출(채용 지도) |
+| `juso.key` | 행정안전부 도로명주소 검색 API 승인키(청약 공고 → 법정동코드). 비면 청약 지오코딩·시세를 건너뛴다 |
 | `saramin.access.key` | 채용정보 |
 | `spring.datasource.url`·`username`·`password` | 청약 공고 저장소. 비면 기동이 실패한다 |
-| `data.go.kr.key` | 청약홈 분양정보 API. 공공데이터포털 일반 인증키 **Decoding** |
+| `data.go.kr.key` | 청약홈 분양정보·경쟁률 API, 국토부 실거래 API(데이터셋마다 활용신청 따로). 공공데이터포털 일반 인증키 **Decoding** |
 | `cheongyak.collect.token` | 수집 입구 보호 토큰. 비면 수집 입구가 503 |
 | `cheongyak.doc.batch-size` | 실행 한 번에 받는 공고문 수(기본 150, 1초 간격) |
+| `cheongyak.result.batch-size`·`geo.batch-size`·`rtms.batch-size` | 실행 한 번의 경쟁률 공고 수(150)·지오코딩 공고 수(200)·실거래 호출 수(300). 첫 백필은 여러 실행에 나눠 채워진다 |
+| `cheongyak.rtms.months`·`market.build-years`·`market.area-tolerance` | 시세 표본: 최근 12개월, 준공 5년 이내, 전용 ±5㎡ |
 
 과거에 쓰던 `polygon.api.key` 는 다시 넣지 않는다.
 
@@ -71,7 +74,7 @@ spring.datasource.password=cheongyak
 
 테스트 DB 는 H2(PostgreSQL 모드) 메모리다(`src/test/resources/application-test.properties`, `@ActiveProfiles("test")`). 그래서 Flyway SQL 은 H2 와 Postgres 양쪽에서 도는 것만 쓴다 — `ON CONFLICT … DO UPDATE`·JSONB·`::` 캐스트는 H2 PG 모드가 거부한다.
 
-서비스 계층은 가짜 HTTP 서버로 돌린다(`src/test/java/com/portfolio/service/StubServer.java`, JDK 의 `HttpServer` 라 의존성이 안 는다). 진짜 유튜브·사람인·모델 API 를 부르면 키가 있어야 하고 할당량과 상대 쪽 사정에 결과가 흔들린다. 그래서 각 서비스의 주소를 속성으로 뺐다 — `youtube.api.base-url`·`saramin.api.url`·`kakao.keyword.url`·`anthropic.api.url` 이고, 안 주면 진짜 주소가 기본값이다.
+서비스 계층은 가짜 HTTP 서버로 돌린다(`src/test/java/com/portfolio/service/StubServer.java`, JDK 의 `HttpServer` 라 의존성이 안 는다). 진짜 유튜브·사람인·모델 API 를 부르면 키가 있어야 하고 할당량과 상대 쪽 사정에 결과가 흔들린다. 그래서 각 서비스의 주소를 속성으로 뺐다 — `youtube.api.base-url`·`saramin.api.url`·`kakao.keyword.url`·`juso.url`·`anthropic.api.url` 이고, 안 주면 진짜 주소가 기본값이다.
 
 여기서만 잡히는 것: 페이지 토큰을 따라가는 수집 루프, 실패 이유별 상태코드 분류, 급여 문자열 파싱, 지역명 정리, 반복공고 세기, 거리 계산, 모델 요청 본문 모양.
 
@@ -98,7 +101,7 @@ $env:JAVA_HOME='C:\Program Files\Java\jdk-17.0.19'; .\mvnw.cmd -B test
 | 명령 | 무엇을 확인하나 |
 |---|---|
 | `./mvnw -B compile` | 컴파일 통과 여부. 가장 싸다 |
-| `./mvnw -B test` | 컴파일 + 컨텍스트 기동 + API 계약·서비스 로직·청약 저장소·판정 규칙 142건. **자바 코드 수정 후 필수** |
+| `./mvnw -B test` | 컴파일 + 컨텍스트 기동 + API 계약·서비스 로직·청약 저장소·판정 규칙·수집 단계 183건. **자바 코드 수정 후 필수** |
 | `./mvnw -B checkstyle:check` | 선언 순서(static → 인스턴스 → 생성자 → 메서드). 설정은 `checkstyle.xml`. 빌드 단계에 안 묶여 Railway 빌드에선 안 돈다 |
 | `./mvnw -B package` | jar 생성까지. 배포 형태 확인 |
 | `./mvnw -B spring-boot:run` | 실제 기동. `application.properties`에 키가 채워져 있어야 한다 |

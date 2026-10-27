@@ -29,6 +29,7 @@ class ApplyhomeClientTest {
         client = new ApplyhomeClient();
         ReflectionTestUtils.setField(client, "serviceKey", "abc+def/ghi==");
         ReflectionTestUtils.setField(client, "baseUrl", stub.url());
+        ReflectionTestUtils.setField(client, "cmpetBaseUrl", stub.url() + "/cmpet");
     }
 
     @AfterEach
@@ -97,5 +98,65 @@ class ApplyhomeClientTest {
         assertThat(ApplyhomeDates.parse("20261015")).isEqualTo(LocalDate.of(2026, 10, 15));
         assertThat(ApplyhomeDates.parse(" ")).isNull();
         assertThat(ApplyhomeDates.parse("2026.10.23")).isNull();
+    }
+
+    @Test
+    @DisplayName("경쟁률은 공고 키 두 개로 거르고, 숫자 아닌 경쟁률은 표기만 남긴다")
+    void cmpetRows() {
+        stub.on("/cmpet/getAPTLttotPblancCmpet", q -> new Object[]{200, "{\"data\":["
+                + "{\"HOUSE_TY\":\"084.9700A\",\"RESIDE_SENM\":\"해당지역\",\"SUBSCRPT_RANK_CODE\":1,"
+                + "\"SUPLY_HSHLDCO\":40,\"REQ_CNT\":\"1,250\",\"CMPET_RATE\":\"31.25\"},"
+                + "{\"HOUSE_TY\":\"084.9700A\",\"RESIDE_SENM\":\"기타지역\",\"SUBSCRPT_RANK_CODE\":1,"
+                + "\"SUPLY_HSHLDCO\":40,\"REQ_CNT\":\"0\",\"CMPET_RATE\":\"-\"}]}"});
+
+        List<CmpetRow> rows = client.fetchCmpet(ApplyhomeKind.APT, "2026000502", "2026000502").stream()
+                .map(d -> NoticeMapper.toCmpet("2026000502", "2026000502", d)).toList();
+
+        assertThat(stub.requests().get(0))
+                .contains("cond%5BHOUSE_MANAGE_NO%3A%3AEQ%5D=2026000502")
+                .contains("cond%5BPBLANC_NO%3A%3AEQ%5D=2026000502");
+        assertThat(rows).extracting(CmpetRow::resideNm, CmpetRow::rankCode, CmpetRow::reqCnt)
+                .containsExactly(org.assertj.core.groups.Tuple.tuple("해당지역", 1, 1250),
+                        org.assertj.core.groups.Tuple.tuple("기타지역", 1, 0));
+        assertThat(rows.get(0).cmpetRate()).isEqualByComparingTo("31.25");
+        assertThat(rows.get(1)).extracting(CmpetRow::cmpetRate, CmpetRow::cmpetText).containsExactly(null, "-");
+    }
+
+    @Test
+    @DisplayName("무순위 경쟁률은 순위 칸이 없어 0, 당첨가점은 최저·최고·평균을 읽는다")
+    void remndrCmpetAndScores() {
+        stub.on("/cmpet/getRemndrLttotPblancCmpet", q -> new Object[]{200,
+                "{\"data\":[{\"HOUSE_TY\":\"059A\",\"SUPLY_HSHLDCO\":2,\"REQ_CNT\":\"3021\",\"CMPET_RATE\":\"1510.5\"}]}"});
+        stub.on("/cmpet/getAptLttotPblancScore", q -> new Object[]{200,
+                "{\"data\":[{\"HOUSE_TY\":\"084A\",\"RESIDE_SENM\":\"해당지역\",\"LWET_SCORE\":\"52\",\"TOP_SCORE\":69,\"AVRG_SCORE\":\"58.31\"}]}"});
+
+        CmpetRow c = NoticeMapper.toCmpet("R", "R", client.fetchCmpet(ApplyhomeKind.REMNDR, "R", "R").get(0));
+        ScoreRow sc = NoticeMapper.toScore("A", "A", client.fetchScores("A", "A").get(0));
+
+        assertThat(c.rankCode()).isZero();
+        assertThat(c.resideNm()).isEqualTo("-");
+        assertThat(sc).extracting(ScoreRow::minScore, ScoreRow::maxScore).containsExactly(52, 69);
+        assertThat(sc.avgScore()).isEqualByComparingTo("58.31");
+    }
+
+    @Test
+    @DisplayName("당첨가점 최고가 0 인 행과 「-」 행은 세 값 다 비운다")
+    void zeroAndDashScores() {
+        stub.on("/cmpet/getAptLttotPblancScore", q -> new Object[]{200, "{\"data\":["
+                + "{\"HOUSE_TY\":\"084A\",\"RESIDE_SENM\":\"기타지역\",\"LWET_SCORE\":\"0\",\"TOP_SCORE\":\"0\",\"AVRG_SCORE\":\"0\"},"
+                + "{\"HOUSE_TY\":\"084A\",\"RESIDE_SENM\":\"해당지역\",\"LWET_SCORE\":\"-\",\"TOP_SCORE\":\"-\",\"AVRG_SCORE\":\"-\"}]}"});
+
+        List<ScoreRow> rows = client.fetchScores("A", "A").stream().map(d -> NoticeMapper.toScore("A", "A", d)).toList();
+
+        assertThat(rows).extracting(ScoreRow::minScore, ScoreRow::maxScore, ScoreRow::avgScore)
+                .containsOnly(org.assertj.core.groups.Tuple.tuple(null, null, null));
+    }
+
+    @Test
+    @DisplayName("결과가 아직 없으면 빈 목록, 판정 대상 아닌 종류는 부르지 않는다")
+    void emptyAndUnsupported() {
+        stub.on("/cmpet/getAPTLttotPblancCmpet", q -> new Object[]{200, "{\"currentCount\":0,\"data\":[]}"});
+        assertThat(client.fetchCmpet(ApplyhomeKind.APT, "A", "A")).isEmpty();
+        assertThatThrownBy(() -> client.fetchCmpet(ApplyhomeKind.URBTY, "A", "A")).isInstanceOf(IllegalArgumentException.class);
     }
 }

@@ -2,6 +2,7 @@ package com.portfolio.cheongyak;
 
 import com.portfolio.cheongyak.dto.JudgeRequest;
 import com.portfolio.cheongyak.dto.JudgeResponse;
+import com.portfolio.cheongyak.dto.NoticeView;
 import com.portfolio.cheongyak.rules.Applicant;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -57,6 +58,24 @@ class CheongyakControllerTest {
     void noticesBadArea() throws Exception {
         mvc.perform(get("/api/cheongyak/notices?area=부산광역시")).andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+    }
+
+    @Test
+    @DisplayName("공고 — 시세·경쟁률·가점 참고치가 JSON 으로 나간다")
+    void noticesWithMarket() throws Exception {
+        Notice n = Fixtures.apt("A1").firstSeenAt(java.time.LocalDateTime.of(2026, 10, 25, 9, 0)).build();
+        HouseType t = Fixtures.type(n, "01", 84.97).mktMedian(71000L).mktCount(4).mktBasis("DONG").build();
+        CmpetRow c = CmpetRow.builder().houseManageNo("A1").pblancNo("A1").houseTy("084A").resideNm("해당지역").rankCode(1)
+                .cmpetRate(new java.math.BigDecimal("12.50")).rawJson("{}").build();
+        NoticeView v = NoticeView.of(n, List.of(t), List.of(c), List.of(), new NoticeView.RefScore(52, 7, "LAWD"));
+        when(service.notices(isNull(), isNull(), eq("capital"), eq(Set.of()))).thenReturn(List.of(v));
+        mvc.perform(get("/api/cheongyak/notices"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.notices[0].houseTypes[0].mktMedian").value(71000))
+                .andExpect(jsonPath("$.notices[0].houseTypes[0].mktBasis").value("DONG"))
+                .andExpect(jsonPath("$.notices[0].topRate").value(12.5))
+                .andExpect(jsonPath("$.notices[0].refScore.median").value(52))
+                .andExpect(jsonPath("$.notices[0].firstSeenAt").value("2026-10-25T09:00:00"));
     }
 
     @Test

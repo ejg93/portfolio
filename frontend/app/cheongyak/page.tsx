@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { CHEONGYAK } from '@/lib/api'
 import { useStoredJson } from '@/lib/clientStore'
-import type { CollectRun, Cond, Filters, HouseTypeView, Judgement, NoticeView, Reason, Rules, Slot, Status } from './types'
+import type { Cmpet, CollectRun, Cond, Filters, HouseTypeView, Judgement, NoticeView, Reason, Rules, Score, Slot, Status } from './types'
 
 // 청약 공고 판정. 조건·검색 칩은 이 브라우저의 슬롯 다섯 칸에만 두고, 판정은 서버 규칙 엔진 응답을 그대로 그린다.
 // 화면에서 판정 규칙을 다시 계산하지 않는다 — 규칙은 백엔드 rules/ 한 곳에 있다.
@@ -71,6 +71,58 @@ function kindOk(n: NoticeView, kind: Filters['kind']) {
   if (kind === 'APT03') return n.kind === 'APT' && n.houseDtlSecd === '03'
   if (kind === 'REMNDR') return n.kind === 'REMNDR'
   return n.kind !== 'APT' && n.kind !== 'REMNDR'
+}
+
+const NEW_HOURS = 36
+
+/**
+ * 처음 수집된 지 NEW_HOURS 안이고 공고일도 사흘 안. 공고일을 같이 보는 건 첫 백필 때문이다 —
+ * 1년치를 한꺼번에 받은 날에는 모든 공고가 「처음 본 지 하루 안」 이다. firstSeenAt 은 한국 시간이다
+ */
+function isNew(n: NoticeView, nowMs: number) {
+  if (!n.firstSeenAt || !n.rcritPblancDe || nowMs <= 0) return false
+  const seen = nowMs - Date.parse(`${n.firstSeenAt.slice(0, 19)}+09:00`) < NEW_HOURS * 36e5
+  return seen && nowMs - Date.parse(`${n.rcritPblancDe}T00:00:00+09:00`) < 3 * 864e5
+}
+
+type Mkt = { text: string; color: string; ratio: number | null }
+
+/** 최고 분양가 ÷ 실거래 시세 중앙값. 0.90 이하 저렴, 1.10 초과 비쌈, 시세가 없으면 비교 불가 */
+function mktLabel(top: number | null, median: number | null): Mkt {
+  if (!top || !median) return { text: '비교 불가', color: 'var(--muted)', ratio: null }
+  const ratio = top / median
+  if (ratio <= 0.9) return { text: '시세 대비 저렴', color: 'var(--accent)', ratio }
+  if (ratio > 1.1) return { text: '시세 대비 비쌈', color: 'var(--accent2)', ratio }
+  return { text: '시세 수준', color: 'var(--accent3)', ratio }
+}
+
+/** 카드 요약에 쓸 주택형: 전용 84㎡ 에 가장 가까운 것 */
+function representative(types: HouseTypeView[]) {
+  return types.filter((t) => t.exclusiveArea != null)
+    .reduce<HouseTypeView | null>((m, t) => (!m || Math.abs((t.exclusiveArea ?? 0) - 84) < Math.abs((m.exclusiveArea ?? 0) - 84) ? t : m), null)
+}
+
+const areaOf = (houseTy: string | null) => (houseTy ? parseFloat(houseTy) : NaN)
+
+/** 주택형 이름이 API 마다 조금 달라(084.9700A · 084A) 앞 전용면적 숫자로도 맞춘다 */
+function sameType(a: string | null, b: string | null) {
+  if (!a || !b) return false
+  return a === b || Math.floor(areaOf(a)) === Math.floor(areaOf(b))
+}
+
+function rateOf(t: HouseTypeView, rows: Cmpet[]) {
+  const r = rows.find((c) => sameType(c.houseTy, t.houseTy) && (c.rankCode === 0 || (c.rankCode === 1 && c.resideNm.startsWith('해당'))))
+  return !r ? '—' : r.cmpetRate != null ? `${r.cmpetRate}:1` : shortfall(r.cmpetText) ?? '—'
+}
+
+// 청약홈은 미달을 「(△3)」 처럼 모자란 세대 수로 적는다
+function shortfall(text: string | null) {
+  const m = text?.match(/^\(△(\d+)\)$/)
+  return m ? `미달 ${m[1]}` : text
+}
+
+function minScoreOf(t: HouseTypeView, rows: Score[]) {
+  return rows.find((c) => sameType(c.houseTy, t.houseTy) && c.resideNm.startsWith('해당'))?.minScore ?? '—'
 }
 
 function docTags(n: NoticeView) {
@@ -156,7 +208,7 @@ export default function CheongyakPage() {
   // ── 공고 목록: 지역·공고일이 바뀔 때만 다시 받는다. 나머지 칩은 화면에서 거른다
   const from = daysAgo(filters.period)
   const noticeQuery = `area=${encodeURIComponent(filters.area)}&from=${from}`
-  const [noticeState, setNoticeState] = useState<{ q: string; list: NoticeView[] | null; error: string | null }>({ q: '', list: null, error: null })
+  const [noticeState, setNoticeState] = useState<{ q: string; list: NoticeView[] | null; error: string | null; at: number }>({ q: '', list: null, error: null, at: 0 })
   useEffect(() => {
     let alive = true
     fetch(`${CHEONGYAK}/notices?${noticeQuery}`)
@@ -165,8 +217,8 @@ export default function CheongyakPage() {
         if (!r.ok) throw new Error(d.message ?? `서버 오류: ${r.status}`)
         return d
       })
-      .then((d) => alive && setNoticeState({ q: noticeQuery, list: d.notices ?? [], error: null }))
-      .catch((e: Error) => alive && setNoticeState({ q: noticeQuery, list: null, error: e.message }))
+      .then((d) => alive && setNoticeState({ q: noticeQuery, list: d.notices ?? [], error: null, at: Date.now() }))
+      .catch((e: Error) => alive && setNoticeState({ q: noticeQuery, list: null, error: e.message, at: Date.now() }))
     return () => {
       alive = false
     }
@@ -420,6 +472,8 @@ export default function CheongyakPage() {
           const cur = rowTypes.length ? judgeOf(rowTypes[sel]) : judgeOf(null)
           const state = !begin ? '' : now < begin ? `접수 D-${dayDiff(begin, now)}` : end && now <= end ? '접수 중' : '마감'
           const genTotal = n.houseTypes.reduce((s, t) => s + (t.suplyHshldco ?? 0), 0)
+          const rep84 = representative(n.houseTypes)
+          const mkt = mktLabel(rep84?.topAmount ?? null, rep84?.mktMedian ?? null)
           return (
             <div key={k} style={{ border: '1px solid var(--border)', borderRadius: '8px', marginTop: '8px', overflow: 'hidden', background: 'var(--surface)' }}>
               <button type="button" onClick={() => toggle(k)} aria-expanded={isOpen}
@@ -429,7 +483,10 @@ export default function CheongyakPage() {
                   {hasCheck && <span style={{ ...S.mono, display: 'block', marginTop: '4px', fontSize: '11px', color: 'var(--accent2)' }}>● 공고 확인 필요</span>}
                 </span>
                 <span style={{ flex: '1 1 260px', minWidth: 0 }}>
-                  <span style={{ display: 'block', fontWeight: 600 }}>{n.houseNm}</span>
+                  <span style={{ display: 'block', fontWeight: 600 }}>
+                    {n.houseNm}
+                    {isNew(n, noticeState.at) && <span style={{ ...S.tag, marginLeft: '6px', color: 'var(--on-accent)', background: 'var(--accent)', border: 0 }}>NEW</span>}
+                  </span>
                   <span style={{ display: 'block', fontSize: '12px', color: 'var(--muted)', marginTop: '2px' }}>
                     <span style={S.tag}>{n.kindLabel}</span>
                     {n.specltRdnAt === 'Y' && <span style={{ ...S.tag, color: 'var(--accent2)' }}>투기과열</span>}
@@ -440,6 +497,23 @@ export default function CheongyakPage() {
                   <span style={{ display: 'block', fontSize: '12px', color: 'var(--muted)', marginTop: '2px' }}>
                     {n.areaNm} · 공고 {n.rcritPblancDe?.slice(5)} · {n.houseTypes.length}개 주택형 · 일반 {genTotal}세대
                   </span>
+                  {(n.resultStatus === 'OK' || n.refScore || mkt.ratio != null) && (
+                    <span style={{ display: 'block', fontSize: '12px', color: 'var(--muted)', marginTop: '2px' }}>
+                      {n.resultStatus === 'OK' && n.topRate != null && <span style={S.tag}>경쟁률 최고 {n.topRate}:1</span>}
+                      {n.resultStatus === 'OK' && n.minScore != null && <span style={S.tag}>최저 당첨가점 {n.minScore}</span>}
+                      {n.refScore && (
+                        <span style={S.tag}>
+                          {n.refScore.basis === 'LAWD' ? '이 시군구' : '이 시도'} 최근 1년 최저 당첨가점 중앙값 {n.refScore.median}
+                          {latestScore ? ` · 내 가점 ${latestScore.total}` : ''}
+                        </span>
+                      )}
+                      {mkt.ratio != null && (
+                        <span style={{ ...S.tag, color: mkt.color, border: `1px solid ${mkt.color}` }}>
+                          {Math.floor(rep84?.exclusiveArea ?? 0)}㎡ {mkt.text} {Math.round(mkt.ratio * 100)}%
+                        </span>
+                      )}
+                    </span>
+                  )}
                 </span>
                 <span style={{ ...S.mono, fontSize: '12px', textAlign: 'right', marginLeft: 'auto' }}>
                   <span style={{ display: 'block', fontWeight: 600, color: state === '마감' ? 'var(--muted)' : state === '접수 중' ? 'var(--accent)' : 'var(--accent3)' }}>{state}</span>
@@ -452,7 +526,10 @@ export default function CheongyakPage() {
                     <div style={{ overflowX: 'auto' }}>
                       <table style={{ borderCollapse: 'collapse', width: '100%' }}>
                         <thead>
-                          <tr>{['주택형', '전용㎡', '일반', '특공', '분양가(만원)', '판정', '가점', '가점제 비율'].map((h) => <th key={h} style={S.th}>{h}</th>)}</tr>
+                          <tr>
+                            {['주택형', '전용㎡', '일반', '특공', '분양가(만원)', '시세(만원)', '시세 대비', '판정', '가점', '가점제 비율', '경쟁률', '최저 가점']
+                              .map((h) => <th key={h} style={S.th}>{h}</th>)}
+                          </tr>
                         </thead>
                         <tbody>
                           {rowTypes.map((t, i) => {
@@ -470,16 +547,27 @@ export default function CheongyakPage() {
                                 <td style={S.td}>{t.suplyHshldco ?? '—'}</td>
                                 <td style={S.td}>{t.spsplyHshldco ?? '—'}</td>
                                 <td style={S.td}>{t.topAmount?.toLocaleString() ?? '—'}</td>
+                                <td style={S.td}>
+                                  {t.mktMedian != null ? `${t.mktMedian.toLocaleString()} (${t.mktBasis === 'DONG' ? '동' : '시군구'} ${t.mktCount}건)` : '—'}
+                                </td>
+                                <td style={{ ...S.td, color: mktLabel(t.topAmount, t.mktMedian).color }}>{mktLabel(t.topAmount, t.mktMedian).text}</td>
                                 <td style={S.td}>{j ? <span style={{ ...badgeStyle(j.status), fontSize: '11px', padding: '1px 6px' }}>{statusLabel(j.status, n.kind)}</span> : '—'}</td>
                                 <td style={S.td}>{j?.score?.total ?? '—'}</td>
                                 <td style={S.td}>
                                   {ps?.pointShare != null ? `${Math.round(ps.pointShare * 100)}%${ps.pointShareSource === 'DOC' ? ' (공고문)' : ''}` : j?.score ? '공고 확인' : '—'}
                                 </td>
+                                <td style={S.td}>{rateOf(t, n.cmpet)}</td>
+                                <td style={S.td}>{minScoreOf(t, n.scores)}</td>
                               </tr>
                             )
                           })}
                         </tbody>
                       </table>
+                    </div>
+                  )}
+                  {rowTypes.some((t) => t.mktMedian != null) && (
+                    <div style={{ fontSize: '11px', color: 'var(--muted)', marginTop: '6px' }}>
+                      시세 — 국토부 실거래 신축(5년 이내) 전용 ±5㎡ 최근 12개월 중앙값, 분양가는 최고가 기준
                     </div>
                   )}
                   {cur ? (
@@ -519,7 +607,10 @@ export default function CheongyakPage() {
           <div style={{ overflowX: 'auto' }}>
             <table style={{ borderCollapse: 'collapse', width: '100%' }}>
               <thead>
-                <tr>{['시작', '상태', '창', '받음', '신규', '갱신', '무순위', 'API 호출', '공고문', '남음', '오류'].map((h) => <th key={h} style={S.th}>{h}</th>)}</tr>
+                <tr>
+                  {['시작', '상태', '창', '받음', '신규', '갱신', '무순위', 'API 호출', '공고문', '남음', '결과', '지오', '실거래', '시세', '오류']
+                    .map((h) => <th key={h} style={S.th}>{h}</th>)}
+                </tr>
               </thead>
               <tbody>
                 {runs.list.map((r) => (
@@ -534,6 +625,10 @@ export default function CheongyakPage() {
                     <td style={S.td}>{r.apiCalls}</td>
                     <td style={S.td}>{r.docOk}/{r.docFetched}</td>
                     <td style={S.td}>{r.docPending}</td>
+                    <td style={S.td}>{r.resultOk ?? 0}/{r.resultFetched ?? 0}{r.resultPending ? ` (남음 ${r.resultPending})` : ''}</td>
+                    <td style={S.td}>{r.geoOk ?? 0}/{r.geoFetched ?? 0}{r.geoPending ? ` (남음 ${r.geoPending})` : ''}</td>
+                    <td style={S.td}>{r.rtmsCalls ?? 0}콜{r.rtmsPending ? ` (남음 ${r.rtmsPending})` : ''}</td>
+                    <td style={S.td}>{r.mktUpdated ?? 0}</td>
                     <td style={S.td}>{r.errorMessage?.slice(0, 40) ?? ''}</td>
                   </tr>
                 ))}

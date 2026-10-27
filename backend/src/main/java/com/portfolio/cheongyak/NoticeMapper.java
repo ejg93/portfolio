@@ -19,6 +19,9 @@ public final class NoticeMapper {
 
     private static final Pattern LEADING_AREA = Pattern.compile("^\\s*(\\d+(?:\\.\\d+)?)");
 
+    // 경쟁률·당첨가점 응답의 거주 구분 필드 후보. 앞의 것부터 본다
+    private static final List<String> RESIDE_FIELDS = List.of("RESIDE_SENM", "RESIDE_SECD_NM", "RESIDE_SECD");
+
     private NoticeMapper() {
     }
 
@@ -87,6 +90,38 @@ public final class NoticeMapper {
         return out;
     }
 
+    /**
+     * 경쟁률 한 줄. 무순위는 순위 칸이 없어 0 으로 둔다.
+     * 거주 구분 필드 이름은 오퍼레이션마다 다를 수 있어 후보를 차례로 본다.
+     */
+    public static CmpetRow toCmpet(String hmn, String pno, JsonNode d) {
+        String text = s(d, "CMPET_RATE");
+        BigDecimal rate = decimal(text);
+        Integer rank = i(d, "SUBSCRPT_RANK_CODE");
+        return CmpetRow.builder().houseManageNo(hmn).pblancNo(pno)
+                .houseTy(nvl(s(d, "HOUSE_TY"), "-"))
+                .resideNm(nvl(first(d, RESIDE_FIELDS), "-"))
+                .rankCode(rank == null ? 0 : rank)
+                .suplyHshldco(i(d, "SUPLY_HSHLDCO")).reqCnt(i(d, "REQ_CNT"))
+                .cmpetRate(rate).cmpetText(rate == null ? text : null)
+                .rawJson(d.toString()).build();
+    }
+
+    /**
+     * 당첨가점 한 줄. 발표 전이면 세 값이 「-」라 null 이다.
+     * 최고가 0 이면 최저·평균도 늘 0 이다 — 가점제 당첨자가 없는 행이라 세 값을 다 null 로 둔다(2026-10-27 실측 7,000행).
+     */
+    public static ScoreRow toScore(String hmn, String pno, JsonNode d) {
+        Integer max = intOf(s(d, "TOP_SCORE"));
+        boolean none = max != null && max == 0;
+        return ScoreRow.builder().houseManageNo(hmn).pblancNo(pno)
+                .houseTy(nvl(s(d, "HOUSE_TY"), "-"))
+                .resideNm(nvl(first(d, RESIDE_FIELDS), "-"))
+                .minScore(none ? null : intOf(s(d, "LWET_SCORE"))).maxScore(none ? null : max)
+                .avgScore(none ? null : decimal(s(d, "AVRG_SCORE")))
+                .rawJson(d.toString()).build();
+    }
+
     private static String s(JsonNode d, String field) {
         JsonNode v = d.path(field);
         if (v.isMissingNode() || v.isNull()) {
@@ -144,6 +179,21 @@ public final class NoticeMapper {
         } catch (NumberFormatException e) {
             return null;
         }
+    }
+
+    private static String first(JsonNode d, List<String> fields) {
+        for (String f : fields) {
+            String v = s(d, f);
+            if (v != null) {
+                return v;
+            }
+        }
+        return null;
+    }
+
+    private static Integer intOf(String v) {
+        BigDecimal d = decimal(v);
+        return d == null ? null : d.intValue();
     }
 
     private static String nvl(String a, String b) {

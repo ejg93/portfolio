@@ -127,11 +127,11 @@ class CollectServiceTest {
     }
 
     @Test
-    @DisplayName("추출값이 컬럼에 안 들어가는 공고는 SAVE_ERR 로 표시하고 다음 공고문을 계속 받는다")
+    @DisplayName("추출값이 컬럼(30자)에 안 들어가는 공고는 SAVE_ERR 로 표시하고 다음 공고문을 계속 받는다")
     void docSaveErrorDoesNotStopOthers() {
         fiveKinds();
         when(docClient.fetch(eq("REMNDR"), anyString()))
-                .thenReturn(NoticeDoc.builder().status("OK").remndrArea("해당 주택건설지역인 수원특례시").build());
+                .thenReturn(NoticeDoc.builder().status("OK").remndrArea("해당 주택건설지역인 수원특례시 영통구·권선구·장안구·팔달구 및 화성특례시 동탄구 일대").build());
         CollectRun run = service.run(running(), SINCE);
         assertThat(run).extracting(CollectRun::docFetched, CollectRun::docOk, CollectRun::docPending).containsExactly(2, 1, 0);
         assertThat(repo.findNotice("2", "2").orElseThrow().docStatus()).isEqualTo(NoticeDoc.SAVE_ERR);

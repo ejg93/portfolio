@@ -8,6 +8,7 @@ import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.lang.reflect.RecordComponent;
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
@@ -17,12 +18,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
- * 청약 공고·주택형·수집 이력 저장소. JdbcClient + SQL 이고, SQL 은 H2(PostgreSQL 모드)와 Postgres 양쪽에서 도는 것만 쓴다.
+ * 청약 공고·주택형·결과·실거래·수집 이력 저장소. JdbcClient + SQL 이고, SQL 은 H2(PostgreSQL 모드)와 Postgres 양쪽에서 도는 것만 쓴다.
  * ON CONFLICT 를 H2 PG 모드가 거부해서 upsert 는 SELECT 뒤 INSERT·UPDATE 두 문장이다.
  * 행 → 레코드는 JdbcClient 의 query(Class) 가 컬럼 이름 스네이크 → 카멜로 맞춘다.
  */
@@ -60,9 +62,17 @@ public class NoticeRepository {
             + ", raw_json = :rawJson, updated_at = :updatedAt"
             + " WHERE house_manage_no = :houseManageNo AND pblanc_no = :pblancNo";
     private static final String INSERT_HOUSE_TYPE = insert("cheongyak_house_type", HOUSE_TYPE_COLUMNS);
-    // 판정 대상: APT 민영·국민(분양전환 임대 제외) + 무순위(04). 공고문은 이것만 받는다
-    private static final String JUDGE_TARGET = "((kind = 'APT' AND house_secd = '01' AND house_dtl_secd IN ('01', '03')"
-            + " AND COALESCE(rent_secd, '0') <> '1') OR (kind = 'REMNDR' AND house_secd = '04'))";
+    private static final String INSERT_CMPET = insert("cheongyak_cmpet", List.of(
+            "house_manage_no", "pblanc_no", "house_ty", "reside_nm", "rank_code", "suply_hshldco", "req_cnt",
+            "cmpet_rate", "cmpet_text", "raw_json"));
+    private static final String INSERT_SCORE = insert("cheongyak_score", List.of(
+            "house_manage_no", "pblanc_no", "house_ty", "reside_nm", "min_score", "max_score", "avg_score", "raw_json"));
+    private static final String INSERT_RTMS = insert("cheongyak_rtms_trade", List.of(
+            "lawd_cd", "deal_ymd", "umd_nm", "apt_nm", "jibun", "exclu_use_ar", "deal_amount", "floor_no",
+            "build_year", "deal_day", "canceled", "dealing_gbn", "raw_json"));
+    // 판정 대상: APT 민영·국민(분양전환 임대 제외) + 무순위(04). 공고문·결과·지오코딩·시세는 이것만 본다
+    private static final String JUDGE_TARGET = judgeTarget("");
+    private static final String CAPITAL = "area_nm IN ('서울', '경기', '인천')";
 
     private final JdbcClient jdbc;
 
@@ -183,7 +193,11 @@ public class NoticeRepository {
     public void finishRun(long id, CollectRun r) {
         jdbc.sql("UPDATE cheongyak_collect_run SET finished_at = :finishedAt, status = :status, fetched = :fetched,"
                         + " inserted = :inserted, updated = :updated, remndr_count = :remndrCount, api_calls = :apiCalls,"
-                        + " doc_fetched = :docFetched, doc_ok = :docOk, doc_pending = :docPending, error_message = :errorMessage"
+                        + " doc_fetched = :docFetched, doc_ok = :docOk, doc_pending = :docPending,"
+                        + " result_fetched = :resultFetched, result_ok = :resultOk, result_pending = :resultPending,"
+                        + " geo_fetched = :geoFetched, geo_ok = :geoOk, geo_pending = :geoPending,"
+                        + " rtms_calls = :rtmsCalls, rtms_pending = :rtmsPending, mkt_updated = :mktUpdated,"
+                        + " error_message = :errorMessage"
                         + " WHERE id = :runId")
                 .paramSource(params(r).addValue("runId", id)).update();
     }
@@ -213,9 +227,166 @@ public class NoticeRepository {
                 .query(LocalDate.class).optional();
     }
 
+    /** 당첨 발표가 지났고 결과를 아직 안 받은 판정 대상. 발표일 최신순 */
+    public List<Notice> resultTargets(LocalDate today, LocalDate since, int limit) {
+        return jdbc.sql("SELECT * FROM cheongyak_notice WHERE result_status IS NULL AND przwner_de IS NOT NULL"
+                        + " AND przwner_de <= :today AND rcrit_pblanc_de >= :since AND " + JUDGE_TARGET
+                        + " ORDER BY przwner_de DESC, house_manage_no DESC LIMIT :limit")
+                .param("today", today).param("since", since).param("limit", limit).query(Notice.class).list();
+    }
+
+    public int countResultPending(LocalDate today, LocalDate since) {
+        return jdbc.sql("SELECT COUNT(*) FROM cheongyak_notice WHERE result_status IS NULL AND przwner_de IS NOT NULL"
+                        + " AND przwner_de <= :today AND rcrit_pblanc_de >= :since AND " + JUDGE_TARGET)
+                .param("today", today).param("since", since).query(Integer.class).single();
+    }
+
+    /** 공고 한 건의 경쟁률·당첨가점을 통째로 바꾸고 결과 상태를 남긴다. API 가 같은 줄을 두 번 주면 앞의 것만 넣는다 */
+    @Transactional
+    public void replaceResults(String hmn, String pno, List<CmpetRow> cmpet, List<ScoreRow> scores, String status) {
+        jdbc.sql("DELETE FROM cheongyak_cmpet WHERE house_manage_no = :h AND pblanc_no = :p").param("h", hmn).param("p", pno).update();
+        jdbc.sql("DELETE FROM cheongyak_score WHERE house_manage_no = :h AND pblanc_no = :p").param("h", hmn).param("p", pno).update();
+        Map<String, CmpetRow> c = new LinkedHashMap<>();
+        cmpet.forEach(r -> c.putIfAbsent(r.houseTy() + "|" + r.resideNm() + "|" + r.rankCode(), r));
+        for (CmpetRow r : c.values()) {
+            jdbc.sql(INSERT_CMPET).paramSource(params(r)).update();
+        }
+        Map<String, ScoreRow> s = new LinkedHashMap<>();
+        scores.forEach(r -> s.putIfAbsent(r.houseTy() + "|" + r.resideNm(), r));
+        for (ScoreRow r : s.values()) {
+            jdbc.sql(INSERT_SCORE).paramSource(params(r)).update();
+        }
+        jdbc.sql("UPDATE cheongyak_notice SET result_status = :s, result_fetched_at = :now WHERE house_manage_no = :h AND pblanc_no = :p")
+                .param("s", status).param("now", now()).param("h", hmn).param("p", pno).update();
+    }
+
+    /** key = 공고 key(). 주택형·순위·거주 순 */
+    public Map<String, List<CmpetRow>> findCmpet(List<Notice> notices) {
+        return byNotice("cheongyak_cmpet", "house_ty, rank_code, reside_nm", CmpetRow.class, notices,
+                r -> r.houseManageNo() + ":" + r.pblancNo());
+    }
+
+    public Map<String, List<ScoreRow>> findScores(List<Notice> notices) {
+        return byNotice("cheongyak_score", "house_ty, reside_nm", ScoreRow.class, notices,
+                r -> r.houseManageNo() + ":" + r.pblancNo());
+    }
+
+    /** 가점 참고치 원자료. 공고일이 since 이후인 APT 민영의 해당지역 주택형별 최저 당첨가점 */
+    public List<ScoreSample> scoreSamples(LocalDate since) {
+        return jdbc.sql("SELECT n.lawd_cd, n.area_nm, s.min_score FROM cheongyak_score s"
+                        + " JOIN cheongyak_notice n ON n.house_manage_no = s.house_manage_no AND n.pblanc_no = s.pblanc_no"
+                        + " WHERE n.kind = 'APT' AND n.house_secd = '01' AND n.house_dtl_secd = '01'"
+                        + " AND s.reside_nm LIKE '해당%' AND s.min_score IS NOT NULL AND n.rcrit_pblanc_de >= :since")
+                .param("since", since).query(ScoreSample.class).list();
+    }
+
+    /** 지오코딩을 아직 안 한 수도권 판정 대상. 공고일 최신순 */
+    public List<Notice> geoTargets(int limit) {
+        return jdbc.sql("SELECT * FROM cheongyak_notice WHERE geo_status IS NULL AND address IS NOT NULL AND " + CAPITAL
+                        + " AND " + JUDGE_TARGET + " ORDER BY rcrit_pblanc_de DESC, house_manage_no DESC LIMIT :limit")
+                .param("limit", limit).query(Notice.class).list();
+    }
+
+    public int countGeoPending() {
+        return jdbc.sql("SELECT COUNT(*) FROM cheongyak_notice WHERE geo_status IS NULL AND address IS NOT NULL AND " + CAPITAL
+                        + " AND " + JUDGE_TARGET)
+                .query(Integer.class).single();
+    }
+
+    /** g 가 null 이면 상태만 남긴다(FAIL) */
+    public void updateGeo(String hmn, String pno, Geo g, String status) {
+        Geo v = g == null ? new Geo(null, null, null, null, null, null) : g;
+        jdbc.sql("UPDATE cheongyak_notice SET geo_status = :status, lawd_cd = :lawdCd, bcode = :bcode, umd_nm = :umdNm,"
+                        + " lat = :lat, lng = :lng, geo_address = :address, geo_at = :now"
+                        + " WHERE house_manage_no = :h AND pblanc_no = :p")
+                .paramSource(params(v).addValue("status", status).addValue("now", now()).addValue("h", hmn).addValue("p", pno))
+                .update();
+    }
+
+    /** 시세를 볼 시군구. 지오코딩된 판정 대상 중 접수가 안 끝났거나 끝난 지 얼마 안 된 공고 */
+    public List<String> rtmsLawdCodes(LocalDate activeSince) {
+        return jdbc.sql("SELECT DISTINCT lawd_cd FROM cheongyak_notice WHERE geo_status = 'OK' AND lawd_cd IS NOT NULL AND "
+                        + JUDGE_TARGET + " AND (rcept_endde IS NULL OR rcept_endde >= :d) ORDER BY lawd_cd")
+                .param("d", activeSince).query(String.class).list();
+    }
+
+    public Optional<LocalDateTime> rtmsMonthFetchedAt(String lawdCd, String dealYmd) {
+        return jdbc.sql("SELECT fetched_at FROM cheongyak_rtms_month WHERE lawd_cd = :l AND deal_ymd = :y")
+                .param("l", lawdCd).param("y", dealYmd).query(LocalDateTime.class).optional();
+    }
+
+    /** 한 (시군구, 계약월) 의 거래를 통째로 바꾼다. 실거래 API 에 거래 ID 가 없어서 행 단위로는 맞출 수 없다 */
+    @Transactional
+    public void replaceRtmsMonth(String lawdCd, String dealYmd, List<RtmsTrade> trades, int apiCalls) {
+        jdbc.sql("DELETE FROM cheongyak_rtms_trade WHERE lawd_cd = :l AND deal_ymd = :y").param("l", lawdCd).param("y", dealYmd).update();
+        for (RtmsTrade t : trades) {
+            jdbc.sql(INSERT_RTMS).paramSource(params(t)).update();
+        }
+        MapSqlParameterSource p = new MapSqlParameterSource().addValue("l", lawdCd).addValue("y", dealYmd)
+                .addValue("now", now()).addValue("n", trades.size()).addValue("c", apiCalls);
+        int changed = jdbc.sql("UPDATE cheongyak_rtms_month SET fetched_at = :now, trade_count = :n, api_calls = :c"
+                + " WHERE lawd_cd = :l AND deal_ymd = :y").paramSource(p).update();
+        if (changed == 0) {
+            jdbc.sql("INSERT INTO cheongyak_rtms_month (lawd_cd, deal_ymd, fetched_at, trade_count, api_calls)"
+                    + " VALUES (:l, :y, :now, :n, :c)").paramSource(p).update();
+        }
+    }
+
+    /** 시세를 계산할 주택형. rtmsLawdCodes 와 같은 공고 범위 */
+    public List<MarketTarget> marketTargets(LocalDate activeSince) {
+        return jdbc.sql("SELECT t.house_manage_no, t.pblanc_no, t.model_no, t.exclusive_area, n.lawd_cd, n.umd_nm"
+                        + " FROM cheongyak_house_type t JOIN cheongyak_notice n"
+                        + " ON n.house_manage_no = t.house_manage_no AND n.pblanc_no = t.pblanc_no"
+                        + " WHERE n.geo_status = 'OK' AND n.lawd_cd IS NOT NULL AND " + judgeTarget("n.")
+                        + " AND t.exclusive_area IS NOT NULL AND t.top_amount IS NOT NULL"
+                        + " AND (n.rcept_endde IS NULL OR n.rcept_endde >= :d)")
+                .param("d", activeSince).query(MarketTarget.class).list();
+    }
+
+    /** 해제 안 된 거래 금액(만원). umdNm 이 null 이면 시군구 전체 */
+    public List<Long> tradeAmounts(String lawdCd, String umdNm, BigDecimal areaMin, BigDecimal areaMax,
+                                   int buildYearMin, String fromYmd) {
+        String sql = "SELECT deal_amount FROM cheongyak_rtms_trade WHERE lawd_cd = :l AND canceled IS NULL"
+                + " AND deal_amount IS NOT NULL AND build_year >= :by AND exclu_use_ar BETWEEN :a AND :b AND deal_ymd >= :from"
+                + (umdNm == null ? "" : " AND umd_nm = :umd");
+        MapSqlParameterSource p = new MapSqlParameterSource().addValue("l", lawdCd).addValue("by", buildYearMin)
+                .addValue("a", areaMin).addValue("b", areaMax).addValue("from", fromYmd).addValue("umd", umdNm);
+        return jdbc.sql(sql).paramSource(p).query(Long.class).list();
+    }
+
+    public void updateMarket(String hmn, String pno, String modelNo, Long median, Integer count, String basis) {
+        jdbc.sql("UPDATE cheongyak_house_type SET mkt_median = :m, mkt_count = :c, mkt_basis = :b, mkt_at = :now"
+                        + " WHERE house_manage_no = :h AND pblanc_no = :p AND model_no = :mn")
+                .param("m", median).param("c", count).param("b", basis).param("now", now())
+                .param("h", hmn).param("p", pno).param("mn", modelNo).update();
+    }
+
     /** 저장 시각은 한국 시간으로 남긴다. 화면이 「N시간 전」 을 한국 시간 기준으로 그린다 */
     public static LocalDateTime now() {
         return LocalDateTime.now(KST);
+    }
+
+    private <T> Map<String, List<T>> byNotice(String table, String order, Class<T> type, List<Notice> notices,
+                                              Function<T, String> key) {
+        Map<String, List<T>> out = new LinkedHashMap<>();
+        if (notices.isEmpty()) {
+            return out;
+        }
+        Set<String> keys = notices.stream().map(Notice::key).collect(Collectors.toSet());
+        List<String> hmns = notices.stream().map(Notice::houseManageNo).distinct().toList();
+        List<T> rows = jdbc.sql("SELECT * FROM " + table + " WHERE house_manage_no IN (:hmns) ORDER BY house_manage_no, pblanc_no, " + order)
+                .param("hmns", hmns).query(type).list();
+        for (T r : rows) {
+            if (keys.contains(key.apply(r))) {
+                out.computeIfAbsent(key.apply(r), k -> new ArrayList<>()).add(r);
+            }
+        }
+        return out;
+    }
+
+    private static String judgeTarget(String a) {
+        return "((" + a + "kind = 'APT' AND " + a + "house_secd = '01' AND " + a + "house_dtl_secd IN ('01', '03')"
+                + " AND COALESCE(" + a + "rent_secd, '0') <> '1') OR (" + a + "kind = 'REMNDR' AND " + a + "house_secd = '04'))";
     }
 
     private static MapSqlParameterSource params(Record r) {

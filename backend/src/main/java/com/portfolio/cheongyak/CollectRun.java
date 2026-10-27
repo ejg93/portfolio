@@ -6,7 +6,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 /**
- * 수집 실행 한 번의 기록. V1 의 cheongyak_collect_run 컬럼과 1:1.
+ * 수집 실행 한 번의 기록. cheongyak_collect_run 컬럼과 1:1(result_* 이하는 V2).
  * status 는 RUNNING → OK | FAIL. 화면 「수집 이력」 과 Actions 폴링이 이 값을 본다.
  */
 @Builder(toBuilder = true)
@@ -25,6 +25,15 @@ public record CollectRun(
         int docFetched,
         int docOk,
         int docPending,
+        int resultFetched,
+        int resultOk,
+        int resultPending,
+        int geoFetched,
+        int geoOk,
+        int geoPending,
+        int rtmsCalls,
+        int rtmsPending,
+        int mktUpdated,
         String errorMessage
 ) {
 
