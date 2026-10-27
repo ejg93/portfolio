@@ -112,7 +112,13 @@ function sameType(a: string | null, b: string | null) {
 
 function rateOf(t: HouseTypeView, rows: Cmpet[]) {
   const r = rows.find((c) => sameType(c.houseTy, t.houseTy) && (c.rankCode === 0 || (c.rankCode === 1 && c.resideNm.startsWith('해당'))))
-  return !r ? '—' : r.cmpetRate != null ? `${r.cmpetRate}:1` : r.cmpetText ?? '—'
+  return !r ? '—' : r.cmpetRate != null ? `${r.cmpetRate}:1` : shortfall(r.cmpetText) ?? '—'
+}
+
+// 청약홈은 미달을 「(△3)」 처럼 모자란 세대 수로 적는다
+function shortfall(text: string | null) {
+  const m = text?.match(/^\(△(\d+)\)$/)
+  return m ? `미달 ${m[1]}` : text
 }
 
 function minScoreOf(t: HouseTypeView, rows: Score[]) {

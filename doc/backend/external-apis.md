@@ -80,8 +80,10 @@
 | `getUrbtyOfctlLttotPblancCmpet`·`getPblPvtRentLttotPblancCmpet`·`getCancResplLttotPblancCmpet`·`getOPTLttotPblancCmpet` | 판정 대상 아닌 종류 | 안 쓴다 |
 
 - 조건: `cond[HOUSE_MANAGE_NO::EQ]`·`cond[PBLANC_NO::EQ]`(APT 는 `cond[RESIDE_SECD::EQ]` 도 받는다)
-- 경쟁률 필드: `HOUSE_TY`, `RESIDE_SENM`(해당지역·기타지역…), `SUBSCRPT_RANK_CODE`(무순위에는 없다), `SUPLY_HSHLDCO`, `REQ_CNT`, `CMPET_RATE`(「-」 처럼 숫자가 아닐 수 있다 — `cmpet_text` 에 그대로 남긴다)
-- 당첨가점 필드: 코드가 최저·최고·평균을 후보 이름 순으로 읽는다(`NoticeMapper` 의 `*_SCORE_FIELDS`). 활용신청 뒤 실측해 이 줄을 고친다
+- 경쟁률 필드: `HOUSE_TY`, `RESIDE_SECD`·`RESIDE_SENM`(01 해당지역·02 기타지역·03 기타경기), `SUBSCRPT_RANK_CODE`(숫자 1·2, 무순위에는 없다), `SUPLY_HSHLDCO`(숫자), `REQ_CNT`(문자열 숫자), `CMPET_RATE`(문자열). 무순위는 거주 구분 대신 `REMNDR_HSHLD_PBLANC_TYCD`
+- `CMPET_RATE` 는 숫자·`-`(접수 0)·`(△3)`(미달 세대 수) 셋이다. 숫자가 아니면 `cmpet_text` 에 그대로 남기고, 화면이 `(△N)` 을 「미달 N」으로 그린다
+- 당첨가점 필드: `LWET_SCORE`(최저)·`TOP_SCORE`(최고)·`AVRG_SCORE`(평균, 소수 둘째 자리) — 셋 다 문자열. 발표 전은 `-`. 최고가 `0` 이면 최저·평균도 늘 `0` 이고 가점제 당첨자가 없는 행이라 세 값을 다 비운다(해당지역 171·기타지역 968 / 7,000행)
+- 2026-10-27 실측: APT 경쟁률 55,524행·무순위 4,329행·당첨가점 30,020행. 첫 페이지가 최신 공고다
 - 발표 직후에는 비어 있을 수 있다 — 발표 14일 안은 다음 실행에 다시 보고, 지나면 `result_status = NONE`
 - 정식 문서:
   - 공공데이터포털: https://www.data.go.kr/data/15098905/openapi.do
@@ -93,7 +95,7 @@
 - 엔드포인트: `GET https://apis.data.go.kr/1613000/RTMSDataSvcAptTradeDev/getRTMSDataSvcAptTradeDev?serviceKey=&LAWD_CD=&DEAL_YMD=&numOfRows=1000&pageNo=`
 - 인증: 5절과 같은 `data.go.kr.key`(Decoding, 한 번 인코딩). 활용신청은 따로
 - 응답: **XML**. 정상 `response/header/resultCode` = `000`, 거래는 `response/body/items/item`, 전체 수는 `totalCount`(1000 을 넘으면 `pageNo` 를 올린다). 키·쿼터 오류는 다른 봉투 `OpenAPI_ServiceResponse/cmmMsgHeader/returnReasonCode`
-- 항목: `aptNm`, `umdNm`(법정동), `jibun`, `excluUseAr`(전용㎡), `dealYear·dealMonth·dealDay`, `dealAmount`(만원, 쉼표), `floor`, `buildYear`, `cdealType`(해제 신고면 값이 있다), `dealingGbn`(중개·직거래)
+- 항목: `aptNm`, `umdNm`(법정동), `jibun`, `excluUseAr`(전용㎡), `dealYear·dealMonth·dealDay`, `dealAmount`(만원, 쉼표), `floor`, `buildYear`, `cdealType`(해제면 `O`, 아니면 공백), `dealingGbn`(중개·직거래). 2026-10-27 실측: 강남구·분당구 3개월 중 한 달 최대 470건이라 1000 을 넘는 달은 없었다
 - 거래 ID 가 없다 — (시군구, 계약월) 단위로 통째로 지우고 다시 넣는다. 이번 달·지난달은 신고가 계속 들어와 7일마다 다시 받는다
 - 쿼터: 활용신청 화면의 값을 따른다(개발계정 기준 일 1만 건 안팎으로 알려져 있다)
 - 정식 문서: https://www.data.go.kr/data/15126468/openapi.do

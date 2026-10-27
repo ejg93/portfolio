@@ -140,6 +140,19 @@ class ApplyhomeClientTest {
     }
 
     @Test
+    @DisplayName("당첨가점 최고가 0 인 행과 「-」 행은 세 값 다 비운다")
+    void zeroAndDashScores() {
+        stub.on("/cmpet/getAptLttotPblancScore", q -> new Object[]{200, "{\"data\":["
+                + "{\"HOUSE_TY\":\"084A\",\"RESIDE_SENM\":\"기타지역\",\"LWET_SCORE\":\"0\",\"TOP_SCORE\":\"0\",\"AVRG_SCORE\":\"0\"},"
+                + "{\"HOUSE_TY\":\"084A\",\"RESIDE_SENM\":\"해당지역\",\"LWET_SCORE\":\"-\",\"TOP_SCORE\":\"-\",\"AVRG_SCORE\":\"-\"}]}"});
+
+        List<ScoreRow> rows = client.fetchScores("A", "A").stream().map(d -> NoticeMapper.toScore("A", "A", d)).toList();
+
+        assertThat(rows).extracting(ScoreRow::minScore, ScoreRow::maxScore, ScoreRow::avgScore)
+                .containsOnly(org.assertj.core.groups.Tuple.tuple(null, null, null));
+    }
+
+    @Test
     @DisplayName("결과가 아직 없으면 빈 목록, 판정 대상 아닌 종류는 부르지 않는다")
     void emptyAndUnsupported() {
         stub.on("/cmpet/getAPTLttotPblancCmpet", q -> new Object[]{200, "{\"currentCount\":0,\"data\":[]}"});

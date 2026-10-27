@@ -19,11 +19,8 @@ public final class NoticeMapper {
 
     private static final Pattern LEADING_AREA = Pattern.compile("^\\s*(\\d+(?:\\.\\d+)?)");
 
-    // 경쟁률·당첨가점 응답의 필드 후보. 앞의 것부터 본다
+    // 경쟁률·당첨가점 응답의 거주 구분 필드 후보. 앞의 것부터 본다
     private static final List<String> RESIDE_FIELDS = List.of("RESIDE_SENM", "RESIDE_SECD_NM", "RESIDE_SECD");
-    private static final List<String> MIN_SCORE_FIELDS = List.of("LWET_SCORE", "LWS_SCORE", "MIN_SCORE");
-    private static final List<String> MAX_SCORE_FIELDS = List.of("TOP_SCORE", "HGHST_SCORE", "MAX_SCORE");
-    private static final List<String> AVG_SCORE_FIELDS = List.of("AVRG_SCORE", "AVG_SCORE");
 
     private NoticeMapper() {
     }
@@ -110,13 +107,18 @@ public final class NoticeMapper {
                 .rawJson(d.toString()).build();
     }
 
-    /** 당첨가점 한 줄. 최저·최고·평균 필드 이름은 후보를 차례로 본다 */
+    /**
+     * 당첨가점 한 줄. 발표 전이면 세 값이 「-」라 null 이다.
+     * 최고가 0 이면 최저·평균도 늘 0 이다 — 가점제 당첨자가 없는 행이라 세 값을 다 null 로 둔다(2026-10-27 실측 7,000행).
+     */
     public static ScoreRow toScore(String hmn, String pno, JsonNode d) {
+        Integer max = intOf(s(d, "TOP_SCORE"));
+        boolean none = max != null && max == 0;
         return ScoreRow.builder().houseManageNo(hmn).pblancNo(pno)
                 .houseTy(nvl(s(d, "HOUSE_TY"), "-"))
                 .resideNm(nvl(first(d, RESIDE_FIELDS), "-"))
-                .minScore(intOf(first(d, MIN_SCORE_FIELDS))).maxScore(intOf(first(d, MAX_SCORE_FIELDS)))
-                .avgScore(decimal(first(d, AVG_SCORE_FIELDS)))
+                .minScore(none ? null : intOf(s(d, "LWET_SCORE"))).maxScore(none ? null : max)
+                .avgScore(none ? null : decimal(s(d, "AVRG_SCORE")))
                 .rawJson(d.toString()).build();
     }
 
