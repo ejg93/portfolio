@@ -49,3 +49,6 @@ Thumbs.db
 
 # EnterWorktree 가 만드는 작업트리. 미추적으로 두면 verify 도장이 다른 세션 작업마다 깨진다
 /.claude/worktrees/
+
+# Superpowers 플러그인 spec·계획·실행 기록. 원천은 대화와 PR 이고 이건 작업용 사본이다.
+/.superpowers/

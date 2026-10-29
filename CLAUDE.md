@@ -42,6 +42,35 @@ hook 은 이 기계에서만 돈다. 다른 기계나 웹에서 올라온 커밋
 
 돌리지 못했으면 못 돌렸다고 밝힌다. 안 돌려보고 "동작한다"·"빌드 통과"라고 쓰지 않는다. 일부만 확인했으면 확인한 범위와 못 한 범위를 나눠서 적는다.
 
+## Superpowers 와 잇는 법
+
+절차는 Superpowers 플러그인(`obra/superpowers`, local 설치)이 굴리고, 관문은 이 저장소 검증 도구가 든다(2026-10-29 사용자 결정).
+**이 파일이 Superpowers 스킬보다 앞선다.** 둘이 다르면 여기를 따른다. 확인한 판은 7.0.0 이다. 판이 바뀌면 아래 표를 스킬 원문과 다시 대조한다.
+
+| 스킬 기본 동작 | 여기서는 |
+|---|---|
+| spec·계획을 `docs/superpowers/` 에 저장하고 커밋 | `.superpowers/specs/`·`.superpowers/plans/` 에 둔다. gitignore 라 커밋 안 함 |
+| 계획 뒤 실행 방식을 묻는다 | `executing-plans` 로 한 세션 안에서 직접 친다. `subagent-driven-development` 는 사용자가 지목할 때만 |
+| worktree 를 만들어 작업 | 안 만든다. `main` 에서 `work/YYYY-MM-DD-<주제>` 브랜치를 따서 제자리에서 작업한다. doc-lint hook 은 `CLAUDE_PROJECT_DIR` 의 git diff 로 고친 파일을 찾아서 worktree 변경을 못 본다 |
+| `test-driven-development` 를 모든 구현에 | `backend/` 에만 건다. frontend 는 단위 시험이 없고 typecheck·e2e 가 시험이다. 단위 시험 틀을 새로 깔지 않는다 |
+| `finishing-a-development-branch` 가 선택지 3개를 내밀고 기다림 | 메뉴를 안 내민다. 아래 「계획 끝」 순서로 머지까지 간다 |
+
+파일 2개 이하를 고치는 일과 질문 답변은 `brainstorming`·`writing-plans` 없이 바로 한다.
+전역 CLAUDE.md 의 플랜 형식(8절)은 `/plan` 플랜 모드에만 걸린다. `writing-plans` 계획 파일은 스킬 형식을 따른다.
+
+**Task 끝** — 바뀐 구역의 빠른 검사(frontend `npm run typecheck`, backend `./mvnw test`) 초록 뒤 커밋한다.
+
+**계획 끝**
+
+| 순서 | 무엇 |
+|---|---|
+| 1 | `bash scripts/verify.sh` 초록. 브랜치 전체를 보고 push 도장을 찍는다 |
+| 2 | 독립 리뷰 — 서브에이전트 하나에 `git diff origin/main...HEAD` 만 주고 대화는 안 준다. 답은 「없다」 또는 `파일:줄 — 무엇` |
+| 3 | 지적을 처분한다. 고치면 1부터 다시 |
+| 4 | push · PR |
+| 5 | `gh pr checks N --watch` 초록 뒤 `gh pr merge N --merge` 를 **단독 명령으로** 낸다. `cd`·`&&`·파이프를 붙이면 허용 규칙에 안 걸린다. squash·`--auto` 는 안 쓴다 |
+| 6 | `backend/` 가 바뀌었으면 deploy-backend 운영 반영을 확인한다 |
+
 ## 토큰 절약
 
 - 이미 읽은 파일 다시 읽지 않는다. 수정 직후 확인용 재읽기도 안 한다
