@@ -45,29 +45,38 @@ hook 은 이 기계에서만 돈다. 다른 기계나 웹에서 올라온 커밋
 ## Superpowers 와 잇는 법
 
 절차는 Superpowers 플러그인(`obra/superpowers`, local 설치)이 굴리고, 관문은 이 저장소 검증 도구가 든다(2026-10-29 사용자 결정).
-**이 파일이 Superpowers 스킬보다 앞선다.** 둘이 다르면 여기를 따른다. 확인한 판은 7.0.0 이다. 판이 바뀌면 아래 표를 스킬 원문과 다시 대조한다.
+**이 파일이 Superpowers 스킬보다 앞선다.** 둘이 다르면 여기를 따른다(`using-superpowers` 「User instructions take precedence」).
+**확인한 판: 7.0.0**(2026-10-29 연동 점검). 판이 오르면 아래 표와 「실행 규칙」「계획 끝」의 덮은 자리를 스킬 원문과 다시 댄다.
 
 | 스킬 기본 동작 | 여기서는 |
 |---|---|
-| spec·계획을 `docs/superpowers/` 에 저장하고 커밋 | `.superpowers/specs/`·`.superpowers/plans/` 에 둔다. gitignore 라 커밋 안 함 |
-| 계획 뒤 실행 방식을 묻는다 | `executing-plans` 로 한 세션 안에서 직접 친다. `subagent-driven-development` 는 사용자가 지목할 때만 |
-| worktree 를 만들어 작업 | 안 만든다. `main` 에서 `work/YYYY-MM-DD-<주제>` 브랜치를 따서 제자리에서 작업한다. doc-lint hook 은 `CLAUDE_PROJECT_DIR` 의 git diff 로 고친 파일을 찾아서 worktree 변경을 못 본다 |
-| `test-driven-development` 를 모든 구현에 | `backend/` 에만 건다. frontend 는 단위 시험이 없고 typecheck·e2e 가 시험이다. 단위 시험 틀을 새로 깔지 않는다 |
-| `finishing-a-development-branch` 가 선택지 3개를 내밀고 기다림 | 메뉴를 안 내민다. 아래 「계획 끝」 순서로 머지까지 간다 |
+| `brainstorming` — 메시지당 질문 하나 · spec 을 `docs/superpowers/specs/` 에 커밋 · builder-check 서브에이전트 · 시각 보조 탭 | **선호 선언**: 사람만 답할 질문은 한 메시지에 (가)/(나) 로 모아 묻는다 · spec 은 `.superpowers/specs/`(gitignore, 커밋 안 함) · builder-check 와 시각 보조는 안 쓴다 · 승인 뒤 같은 세션이 `writing-plans` 로 간다 |
+| `writing-plans` — 계획을 `docs/superpowers/plans/` 에 · 헤더에 `subagent-driven-development (recommended)` · 쓴 뒤 검토와 실행 방식을 묻고 기다림 | 계획은 `.superpowers/plans/`. 헤더 REQUIRED SUB-SKILL 은 `superpowers:executing-plans` 하나. `Spec:` 줄은 `.superpowers/specs/` 의 그 파일이고, spec 없이 온 일이면 「없음 — 요구는 대화」. **검토도 실행 방식도 묻지 않는다** — spec 승인이 검토다. 계획 경로 한 줄만 알리고 `executing-plans` 로 간다 |
+| `executing-plans` — Setup 에서 worktree · push·머지는 「물어야 하는 부작용」 · 끝에 `finishing-a-development-branch` | 아래 「실행 규칙」과 「계획 끝」. `subagent-driven-development` 는 사용자가 지목할 때만 |
+| `using-git-worktrees` — 선언이 없으면 worktree 를 묻는다 | **worktree 선호: 쓰지 않는다. `EnterWorktree` 도 안 쓴다.** `main` 이면 묻지 않고 `work/YYYY-MM-DD-<주제>` 가지를 따서 제자리에서 친다. doc-lint hook 은 `CLAUDE_PROJECT_DIR` 의 git diff 로 고친 파일을 찾아서 worktree 변경을 못 본다 |
+| `test-driven-development` 를 모든 구현에 · 설정 파일 예외는 사람 허락 | `backend/` 코드에만 건다. frontend 는 단위 시험이 없고 typecheck·e2e 가 시험이다. 단위 시험 틀을 새로 깔지 않는다. **예외 허락(2026-10-29)**: 문서·설정·마이그레이션만 건드리는 Task 와 frontend Task 는 「실패하는 테스트 먼저」 단계를 빼고, 그 Task 의 「Task 끝」 명령이 RED→GREEN 자리다. 원장에 `Ruling:` 한 줄 |
+| `finishing-a-development-branch` 가 선택지 3개를 내밀고 기다림 | **부르지 않는다** — 메뉴를 덮어도 스킬이 「그대로 내밀고 기다리라」고 반박한다. 아래 「계획 끝」이 대신한다 |
 
-파일 2개 이하를 고치는 일과 질문 답변은 `brainstorming`·`writing-plans` 없이 바로 한다.
+`using-superpowers` 의 1% 규칙과 「plan mode 앞 brainstorming」은 창작에만 선다. 파일 2개 이하를 고치는 일 · 질문 답변 · 점검·검증·리뷰 · `/plan` 설계는 `brainstorming`·`writing-plans` 없이 바로 한다.
 전역 CLAUDE.md 의 플랜 형식(8절)은 `/plan` 플랜 모드에만 걸린다. `writing-plans` 계획 파일은 스킬 형식을 따른다.
 
-**Task 끝** — 바뀐 구역의 빠른 검사(frontend `npm run typecheck`, backend `./mvnw test`) 초록 뒤 커밋한다.
+**실행 규칙** — `executing-plans` 로 칠 때
+
+- 한 세션이 인라인으로 친다. Task 마다 서브에이전트를 안 띄운다
+- push·PR·머지는 묻지 않는다 — 2026-10-29 사용자가 위임했다. `executing-plans` 의 「물어야 하는 부작용」에 해당하지 않는다
+- **Task 끝** — 바뀐 구역의 빠른 검사 초록 → 커밋 → 같은 명령으로 `task-done PLAN N BASE -- <명령>`. `task-done` 은 명령을 `"$@"` 로 직접 실행해서 `JAVA_HOME=… ./mvnw` 꼴 환경 접두가 안 돈다. 명령은 셋 중 하나다
+  - frontend: `bash -c 'cd frontend && npm run typecheck'`
+  - backend: `bash -c 'cd backend && JAVA_HOME="C:/Program Files/Java/jdk-17.0.19" ./mvnw -B -q test'`
+  - 문서만: `bash scripts/doc-lint.sh <고친 파일>`
 
 **계획 끝**
 
 | 순서 | 무엇 |
 |---|---|
-| 1 | `bash scripts/verify.sh` 초록. 브랜치 전체를 보고 push 도장을 찍는다 |
-| 2 | 독립 리뷰 — 서브에이전트 하나에 `git diff origin/main...HEAD` 만 주고 대화는 안 준다. 답은 「없다」 또는 `파일:줄 — 무엇` |
-| 3 | 지적을 처분한다. 고치면 1부터 다시 |
-| 4 | push · PR |
+| 1 | **독립 리뷰 = `executing-plans` 의 Final Review 하나** — `review-package PLAN $(git merge-base origin/main HEAD) HEAD` 패키지 + `code-reviewer.md`, 서브에이전트에 `model: fable` 명시. 계획 Review Focus 에 이 저장소 질문을 적어 둔다: 요청 밖 `public/` 정적 보관물을 건드렸나 · 글 작성 규칙 1·2·3·5(기계가 못 잡는 것) · 새 라우트가 LAB 메뉴·sitemap·e2e 라우트 목록에 올랐나 · 키·토큰이 diff 에 섞였나. 대화는 안 준다. 따로 리뷰를 또 돌리지 않는다 |
+| 2 | 처분 — Critical·Important 는 한 번의 고침 패스로 지금 고쳐 커밋, Minor 는 PR 본문 「Deferred minors」. 오탐도 근거를 적는다 |
+| 3 | `bash scripts/verify.sh` 초록. 브랜치 전체를 보고 push 도장을 찍는다. **2 의 고침 커밋 뒤에 돈다** — 먼저 돌면 고침이 지문을 바꿔 push hook 이 막는다. 빨가면 고치고 3 만 다시 돈다 |
+| 4 | push · PR. 본문에 원장 `.superpowers/sdd/<계획>/progress.md` 의 `Ruling:` 줄과 Deferred minors 를 옮긴다. 옮긴 뒤 워크스페이스를 지운다 |
 | 5 | `gh pr checks N --watch` 초록 뒤 `gh pr merge N --merge` 를 **단독 명령으로** 낸다. `cd`·`&&`·파이프를 붙이면 허용 규칙에 안 걸린다. squash·`--auto` 는 안 쓴다 |
 | 6 | `backend/` 가 바뀌었으면 deploy-backend 운영 반영을 확인한다 |
 
