@@ -52,6 +52,13 @@
   --yt-btn: #c62828;
 }
 
+/* 테마 전환은 AppShell 이 원형 clip-path 로 직접 그린다. 브라우저 기본 페이드는 끈다 */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
 html, body {

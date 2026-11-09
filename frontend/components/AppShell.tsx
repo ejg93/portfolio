@@ -1,7 +1,17 @@
 'use client'
 import Sidebar from '@/components/Sidebar'
 import { useEffect } from 'react'
+import { flushSync } from 'react-dom'
 import { useStoredFlag } from '@/lib/clientStore'
+
+// 원이 퍼지는 속도 곡선. 빨리 나갔다가 끝에서 천천히 멈춘다
+const REVEAL_EASING = 'linear(0, 0.034, 0.114, 0.215, 0.321, 0.423, 0.516, 0.599, 0.671, 0.732, 0.783, 0.825, 0.86, 0.888, 0.911, 0.93, 0.944, 0.956, 0.966, 0.973, 0.979, 0.983, 0.987, 0.99, 0.992, 0.994, 0.995, 0.996, 0.997, 0.998, 0.998, 0.999, 1)'
+
+function applyTheme(dark: boolean) {
+  const root = document.documentElement
+  if (dark) root.setAttribute('data-theme', 'dark')
+  else root.removeAttribute('data-theme')
+}
 
 // 테마 토글과 사이드바가 상태를 쥐고 있어 클라이언트 컴포넌트다.
 // 루트 레이아웃은 서버 컴포넌트로 남겨야 metadata(탭 제목)를 내보낼 수 있다.
@@ -11,11 +21,31 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const [darkMode, setDarkMode] = useStoredFlag('theme', 'dark', 'light')
 
   // 팔레트는 globals.css 가 쥐고 있다. 여기서는 어느 쪽을 쓸지만 표시한다
-  useEffect(() => {
-    const root = document.documentElement
-    if (darkMode) root.setAttribute('data-theme', 'dark')
-    else root.removeAttribute('data-theme')
-  }, [darkMode])
+  useEffect(() => applyTheme(darkMode), [darkMode])
+
+  // 새 테마 화면을 버튼 중심에서 원으로 넓혀 덮는다. View Transitions 가 없거나 동작 줄이기 설정이면 바로 바꾼다
+  const toggleTheme = (button: HTMLElement) => {
+    const next = !darkMode
+    if (!document.startViewTransition || matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      setDarkMode(next)
+      return
+    }
+    const { left, top, width, height } = button.getBoundingClientRect()
+    const x = left + width / 2
+    const y = top + height / 2
+    const radius = Math.hypot(Math.max(x, innerWidth - x), Math.max(y, innerHeight - y))
+    // 콜백이 끝나는 순간의 화면을 새 스냅숏으로 찍으므로 이펙트를 기다리지 않고 그 자리에서 바꾼다
+    const transition = document.startViewTransition(() => {
+      flushSync(() => setDarkMode(next))
+      applyTheme(next)
+    })
+    transition.ready.then(() => {
+      document.documentElement.animate(
+        { clipPath: [`circle(0 at ${x}px ${y}px)`, `circle(${radius}px at ${x}px ${y}px)`] },
+        { duration: 500, easing: REVEAL_EASING, pseudoElement: '::view-transition-new(root)' },
+      )
+    })
+  }
 
   return (
     <>
@@ -39,7 +69,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             zIndex: 90,
           }}>
             <button
-              onClick={() => setDarkMode(!darkMode)}
+              onClick={(e) => toggleTheme(e.currentTarget)}
               style={{
                 background: 'transparent',
                 border: '1px solid var(--border)',
