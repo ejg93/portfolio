@@ -172,16 +172,32 @@
   });
 
   /* ── 테마: 목록과 같은 키 ── */
+  /* 원이 퍼지는 속도 곡선. AppShell 과 같은 값이다 */
+  var REVEAL_EASING = 'linear(0, 0.034, 0.114, 0.215, 0.321, 0.423, 0.516, 0.599, 0.671, 0.732, 0.783, 0.825, 0.86, 0.888, 0.911, 0.93, 0.944, 0.956, 0.966, 0.973, 0.979, 0.983, 0.987, 0.99, 0.992, 0.994, 0.995, 0.996, 0.997, 0.998, 0.998, 0.999, 1)';
   function applyTheme(dark){
     if(dark) document.documentElement.setAttribute('data-theme', 'dark');
     else document.documentElement.removeAttribute('data-theme');
     themeBtn.textContent = dark ? '☀ LIGHT' : '☾ DARK';
   }
   applyTheme(get(KEY_THEME) === 'dark');
+  /* 새 테마 화면을 버튼 중심에서 원으로 넓혀 덮는다. View Transitions 가 없거나 동작 줄이기 설정이면 바로 바꾼다 */
   themeBtn.addEventListener('click', function(){
     var dark = document.documentElement.getAttribute('data-theme') !== 'dark';
     set(KEY_THEME, dark ? 'dark' : 'light');
-    applyTheme(dark);
+    if(!document.startViewTransition || matchMedia('(prefers-reduced-motion: reduce)').matches){
+      applyTheme(dark);
+      return;
+    }
+    var r = themeBtn.getBoundingClientRect();
+    var x = r.left + r.width / 2, y = r.top + r.height / 2;
+    var radius = Math.hypot(Math.max(x, innerWidth - x), Math.max(y, innerHeight - y));
+    var transition = document.startViewTransition(function(){ applyTheme(dark); });
+    transition.ready.then(function(){
+      document.documentElement.animate(
+        { clipPath: ['circle(0 at ' + x + 'px ' + y + 'px)', 'circle(' + radius + 'px at ' + x + 'px ' + y + 'px)'] },
+        { duration: 500, easing: REVEAL_EASING, pseudoElement: '::view-transition-new(root)' }
+      );
+    });
   });
   window.addEventListener('storage', function(e){ if(e.key === KEY_THEME) applyTheme(e.newValue === 'dark'); });
 

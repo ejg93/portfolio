@@ -19,6 +19,9 @@
   --code-bg:#161b22; --scroll:#3a4553;
   color-scheme:dark;
 }
+/* 테마 전환은 shell.js 가 원형 clip-path 로 직접 그린다. 브라우저 기본 페이드는 끈다 */
+::view-transition-old(root),
+::view-transition-new(root){animation:none; mix-blend-mode:normal;}
 
 *{box-sizing:border-box;}
 html,body{margin:0;padding:0;}
