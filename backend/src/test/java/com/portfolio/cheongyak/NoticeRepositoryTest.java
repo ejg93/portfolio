@@ -64,8 +64,19 @@ class NoticeRepositoryTest {
     @DisplayName("공고가 그대로면(0) 넘긴 주택형이 비어도 저장된 주택형을 지우지 않는다")
     void unchangedNoticeKeepsTypes() {
         Notice n = Fixtures.apt("A1").build();
-        assertThat(repo.saveNoticeWithTypes(n, List.of(Fixtures.type(n, "01", 84.97).build()))).isEqualTo(1);
-        assertThat(repo.saveNoticeWithTypes(n, List.of())).isZero();
+        assertThat(repo.saveNoticeWithTypes(n, 1, List.of(Fixtures.type(n, "01", 84.97).build()))).isEqualTo(1);
+        assertThat(repo.saveNoticeWithTypes(n, 0, List.of())).isZero();
+        assertThat(repo.findHouseTypes(List.of(n)).get(n.key())).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("부르는 쪽이 본 변화대로 쓴다 — 그 사이 raw 가 바뀌어도 빈 주택형으로 지우지 않는다")
+    void savesByObservedChange() {
+        Notice n = Fixtures.apt("A1").build();
+        repo.saveNoticeWithTypes(n, 1, List.of(Fixtures.type(n, "01", 84.97).build()));
+        repo.upsertNotice(n.toBuilder().rawJson("{\"changed\":1}").build());
+
+        assertThat(repo.saveNoticeWithTypes(n, 0, List.of())).isZero();
         assertThat(repo.findHouseTypes(List.of(n)).get(n.key())).hasSize(1);
     }
 

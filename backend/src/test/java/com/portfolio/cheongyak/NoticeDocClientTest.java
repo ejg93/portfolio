@@ -158,12 +158,24 @@ class NoticeDocClientTest {
     }
 
     @Test
-    @DisplayName("첨부 파일명 퍼센트 인코딩이 깨졌으면 예외 대신 BAD_URL")
-    void badContentDispositionIsBadUrl() throws IOException {
+    @DisplayName("첨부 파일명 퍼센트 인코딩이 깨져도 PDF 는 이름 없이 받는다")
+    void badFilenameStillReadsPdf() throws IOException {
         serve("/detail", 200, null, utf8("<a href=\"" + base + "/att?no=1\">공고문</a>"));
         serve("/att", 200, "attachment; filename*=UTF-8''%E0%A4%A", pdf("BODY"));
 
-        assertThat(client.download(base + "/detail").status()).isEqualTo("BAD_URL");
+        NoticeDocClient.Download d = client.download(base + "/detail");
+
+        assertThat(d.status()).isEqualTo("OK");
+        assertThat(d.text()).contains("BODY");
+    }
+
+    @Test
+    @DisplayName("호스트 대소문자는 가리지 않는다")
+    void hostIsCaseInsensitive() {
+        serve("/detail", 200, null, utf8("<html>첨부 없음</html>"));
+        ReflectionTestUtils.setField(client, "allowedHost", Pattern.compile("localhost"));
+
+        assertThat(client.download(base.replace("127.0.0.1", "LOCALHOST") + "/detail").status()).isEqualTo("NO_LINK");
     }
 
     @Test

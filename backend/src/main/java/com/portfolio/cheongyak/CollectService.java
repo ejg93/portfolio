@@ -141,11 +141,12 @@ public class CollectService {
                         continue;
                     }
                     List<HouseType> types = List.of();
-                    if (repo.noticeChange(n) != 0) {
+                    int change = repo.noticeChange(n);
+                    if (change != 0) {
                         types = NoticeMapper.toHouseTypes(kind, n, client.fetchHouseTypes(kind, n.pblancNo()));
                         pause(GAP_ODCLOUD_MS);
                     }
-                    int r = repo.saveNoticeWithTypes(n, types);
+                    int r = repo.saveNoticeWithTypes(n, change, types);
                     fetched++;
                     inserted += r == 1 ? 1 : 0;
                     updated += r == 2 ? 1 : 0;

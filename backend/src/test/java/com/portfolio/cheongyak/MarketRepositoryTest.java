@@ -167,7 +167,7 @@ class MarketRepositoryTest {
     @DisplayName("시세 대상 주택형은 지오코딩된 공고의 전용·분양가가 있는 줄만, 결과는 updateMarket 으로 남는다")
     void marketTargetsAndUpdate() {
         Notice n = Fixtures.apt("A1").rceptEndde(TODAY).build();
-        repo.saveNoticeWithTypes(n, List.of(Fixtures.type(n, "01", 84.97).build(),
+        repo.saveNoticeWithTypes(n, 1, List.of(Fixtures.type(n, "01", 84.97).build(),
                 Fixtures.type(n, "02", 59.0).exclusiveArea(null).build()));
         repo.updateGeo("A1", "A1", geo("41597", "반송동"), "OK");
 
