@@ -1,5 +1,6 @@
 package com.portfolio.cheongyak;
 
+import com.portfolio.cheongyak.dto.JudgeRequest;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.jdbc.support.GeneratedKeyHolder;
@@ -143,6 +144,19 @@ public class NoticeRepository {
     public Optional<Notice> findNotice(String hmn, String pno) {
         return jdbc.sql("SELECT * FROM cheongyak_notice WHERE house_manage_no = :h AND pblanc_no = :p")
                 .param("h", hmn).param("p", pno).query(Notice.class).optional();
+    }
+
+    /** 요청한 키 순서대로. 없는 키는 빠지고 중복 키는 한 번만. 쿼리는 관리번호 IN 한 번 */
+    public List<Notice> findNoticesByKeys(List<JudgeRequest.Key> keys) {
+        if (keys.isEmpty()) {
+            return List.of();
+        }
+        List<String> hmns = keys.stream().map(JudgeRequest.Key::houseManageNo).distinct().toList();
+        Map<String, Notice> byKey = jdbc.sql("SELECT * FROM cheongyak_notice WHERE house_manage_no IN (:hmns)")
+                .param("hmns", hmns).query(Notice.class).list().stream()
+                .collect(Collectors.toMap(Notice::key, Function.identity()));
+        return keys.stream().map(k -> k.houseManageNo() + ":" + k.pblancNo()).distinct()
+                .map(byKey::get).filter(n -> n != null).toList();
     }
 
     /** key = 공고 key(). 주택형은 model_no 순 */

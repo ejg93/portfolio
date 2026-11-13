@@ -81,9 +81,7 @@ public class CheongyakQueryService {
         if (req.notices() == null || req.notices().isEmpty()) {
             targets.addAll(find(null, null, "capital", Set.of()));
         } else {
-            for (JudgeRequest.Key k : req.notices().subList(0, Math.min(MAX_NOTICES, req.notices().size()))) {
-                repo.findNotice(k.houseManageNo(), k.pblancNo()).ifPresent(targets::add);
-            }
+            targets.addAll(repo.findNoticesByKeys(req.notices().subList(0, Math.min(MAX_NOTICES, req.notices().size()))));
         }
         Map<String, List<HouseType>> types = repo.findHouseTypes(targets);
         List<Judgement> results = new ArrayList<>();

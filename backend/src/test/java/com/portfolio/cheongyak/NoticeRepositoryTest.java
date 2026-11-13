@@ -1,5 +1,6 @@
 package com.portfolio.cheongyak;
 
+import com.portfolio.cheongyak.dto.JudgeRequest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -66,6 +67,17 @@ class NoticeRepositoryTest {
         assertThat(repo.saveNoticeWithTypes(n, List.of(Fixtures.type(n, "01", 84.97).build()))).isEqualTo(1);
         assertThat(repo.saveNoticeWithTypes(n, List.of())).isZero();
         assertThat(repo.findHouseTypes(List.of(n)).get(n.key())).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("findNoticesByKeys — 요청 순서를 지키고 없는 키·중복 키는 한 번만")
+    void findNoticesByKeysKeepsOrder() {
+        for (String h : List.of("A1", "A2", "A3")) {
+            repo.upsertNotice(Fixtures.apt(h).build());
+        }
+        List<JudgeRequest.Key> keys = List.of(new JudgeRequest.Key("A3", "A3"), new JudgeRequest.Key("X9", "X9"),
+                new JudgeRequest.Key("A1", "A1"), new JudgeRequest.Key("A3", "A3"));
+        assertThat(repo.findNoticesByKeys(keys)).extracting(Notice::houseManageNo).containsExactly("A3", "A1");
     }
 
     @Test
