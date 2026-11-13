@@ -97,6 +97,10 @@ public class NoticeDocClient {
                 log.warn("공고문 PDF 를 못 읽었다 - {}", e.getClass().getSimpleName());
                 return new Download("PARSE_ERR", null);
             }
+        } catch (IllegalArgumentException e) {
+            // URI.create·URLDecoder 가 깨진 주소·헤더에서 던진다
+            log.warn("청약홈 공고문 주소·헤더 해석 실패 - {}", e.getClass().getSimpleName());
+            return new Download(NoticeDoc.BAD_URL, null);
         } catch (IOException e) {
             log.warn("청약홈 공고문 요청 실패 - {}", e.getClass().getSimpleName());
             return new Download("HTTP_ERR", null);

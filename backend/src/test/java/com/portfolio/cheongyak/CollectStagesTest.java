@@ -140,6 +140,24 @@ class CollectStagesTest {
     }
 
     @Test
+    @DisplayName("결과를 못 받은 공고 하나는 건너뛰고 다음 공고 결과는 받는다")
+    void resultFailureSkipsOnlyThatNotice() {
+        announced(Fixtures.apt("A1"), 2);
+        announced(Fixtures.apt("A2"), 10);
+        when(client.fetchCmpet(any(), eq("A1"), anyString()))
+                .thenThrow(new UpstreamException(HttpStatus.BAD_GATEWAY, "UPSTREAM_ERROR", "x"));
+        when(client.fetchCmpet(any(), eq("A2"), anyString())).thenReturn(List.of(CMPET));
+        when(client.fetchScores(anyString(), anyString())).thenReturn(List.of(SCORE));
+
+        CollectRun r = run();
+
+        assertThat(r).extracting(CollectRun::status, CollectRun::resultFetched, CollectRun::resultOk)
+                .containsExactly(CollectRun.OK, 1, 1);
+        Notice a2 = repo.findNotice("A2", "A2").orElseThrow();
+        assertThat(repo.findScores(List.of(a2)).get(a2.key())).extracting(ScoreRow::minScore).containsExactly(52);
+    }
+
+    @Test
     @DisplayName("결과 단계가 실패해도 수집은 OK 이고 다음 단계(지오코딩)는 돈다")
     void stageFailureContinues() {
         announced(Fixtures.apt("A1").address("서울 강동구 강일동 174"), 10);

@@ -25,6 +25,10 @@ public record NoticeDoc(
     public static final String OK = "OK";
     /** 받아서 뽑았지만 컬럼에 안 들어가 저장 못 함 */
     public static final String SAVE_ERR = "SAVE_ERR";
+    /** 공고 주소나 첨부 헤더가 깨져 요청·해석을 못 함 */
+    public static final String BAD_URL = "BAD_URL";
+    /** 받는 도중 예상 못 한 예외. 다음 실행이 같은 공고에서 멈추지 않게 표시만 한다 */
+    public static final String FETCH_ERR = "FETCH_ERR";
 
     /** 첨부를 못 받았거나 못 읽은 경우. 값 없이 사유만 남긴다 */
     public static NoticeDoc failed(String status) {

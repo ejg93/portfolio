@@ -127,6 +127,18 @@ class CollectServiceTest {
     }
 
     @Test
+    @DisplayName("공고문 받기가 예외를 던진 공고는 FETCH_ERR 로 표시하고 다음 공고문을 계속 받는다")
+    void docFetchExceptionDoesNotStopOthers() {
+        fiveKinds();
+        when(docClient.fetch(eq("REMNDR"), anyString())).thenThrow(new IllegalArgumentException("bad url"));
+        CollectRun run = service.run(running(), SINCE);
+        assertThat(run.status()).isEqualTo(CollectRun.OK);
+        assertThat(run).extracting(CollectRun::docFetched, CollectRun::docOk, CollectRun::docPending).containsExactly(2, 1, 0);
+        assertThat(repo.findNotice("2", "2").orElseThrow().docStatus()).isEqualTo("FETCH_ERR");
+        assertThat(repo.findNotice("1", "1").orElseThrow().docStatus()).isEqualTo("OK");
+    }
+
+    @Test
     @DisplayName("추출값이 컬럼(30자)에 안 들어가는 공고는 SAVE_ERR 로 표시하고 다음 공고문을 계속 받는다")
     void docSaveErrorDoesNotStopOthers() {
         fiveKinds();

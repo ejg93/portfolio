@@ -158,7 +158,14 @@ public class CollectService {
         int docOk = 0;
         try {
             for (Notice n : repo.judgeTargetsWithoutDoc(docBatch)) {
-                NoticeDoc doc = docClient.fetch(n.kind(), n.pblancUrl());
+                NoticeDoc doc;
+                try {
+                    doc = docClient.fetch(n.kind(), n.pblancUrl());
+                } catch (RuntimeException e) {
+                    // 표시를 안 하면 다음 실행도 같은 공고를 먼저 집어 단계가 매번 여기서 멈춘다
+                    log.warn("수집 {} 공고문 받기 실패 {}:{} — {}", id, n.houseManageNo(), n.pblancNo(), e.getClass().getSimpleName());
+                    doc = NoticeDoc.failed(NoticeDoc.FETCH_ERR);
+                }
                 try {
                     repo.updateDoc(n.houseManageNo(), n.pblancNo(), doc);
                 } catch (DataIntegrityViolationException e) {
@@ -201,13 +208,24 @@ public class CollectService {
                 String hmn = n.houseManageNo();
                 String pno = n.pblancNo();
                 boolean apt = ApplyhomeKind.APT.name().equals(n.kind());
-                List<CmpetRow> cmpet = client.fetchCmpet(apt ? ApplyhomeKind.APT : ApplyhomeKind.REMNDR, hmn, pno).stream()
-                        .map(d -> NoticeMapper.toCmpet(hmn, pno, d)).toList();
-                pause(GAP_ODCLOUD_MS);
+                List<CmpetRow> cmpet;
                 List<ScoreRow> scores = List.of();
-                if (apt) {
-                    scores = client.fetchScores(hmn, pno).stream().map(d -> NoticeMapper.toScore(hmn, pno, d)).toList();
+                try {
+                    cmpet = client.fetchCmpet(apt ? ApplyhomeKind.APT : ApplyhomeKind.REMNDR, hmn, pno).stream()
+                            .map(d -> NoticeMapper.toCmpet(hmn, pno, d)).toList();
                     pause(GAP_ODCLOUD_MS);
+                    if (apt) {
+                        scores = client.fetchScores(hmn, pno).stream().map(d -> NoticeMapper.toScore(hmn, pno, d)).toList();
+                        pause(GAP_ODCLOUD_MS);
+                    }
+                } catch (RuntimeException e) {
+                    // pause 의 중단 신호는 단계를 끝내야 한다
+                    if (Thread.currentThread().isInterrupted()) {
+                        throw e;
+                    }
+                    // 같은 공고가 발표일 순으로 매번 먼저 오니, 여기서 단계를 끝내면 뒤 공고는 영영 못 받는다
+                    log.warn("수집 {} 결과 {}:{} 건너뜀 — {}", id, hmn, pno, e.getClass().getSimpleName());
+                    continue;
                 }
                 fetched++;
                 if (!cmpet.isEmpty() || !scores.isEmpty()) {

@@ -77,6 +77,15 @@ class NoticeDocClientTest {
     }
 
     @Test
+    @DisplayName("첨부 파일명 퍼센트 인코딩이 깨졌으면 예외 대신 BAD_URL")
+    void badContentDispositionIsBadUrl() throws IOException {
+        serve("/detail", 200, null, utf8("<a href=\"" + base + "/att?no=1\">공고문</a>"));
+        serve("/att", 200, "attachment; filename*=UTF-8''%E0%A4%A", pdf("BODY"));
+
+        assertThat(client.download(base + "/detail").status()).isEqualTo("BAD_URL");
+    }
+
+    @Test
     @DisplayName("첨부가 둘이면 파일명에 「모집공고」 가 든 PDF 를 고른다(&amp; 는 & 로)")
     void picksNoticePdf() throws IOException {
         String html = "<a href=\"" + base + "/att?no=1&amp;sn=1\">안내</a><a href='" + base + "/att?no=1&amp;sn=2'>공고문</a>";
