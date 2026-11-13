@@ -29,6 +29,8 @@ public record NoticeDoc(
     public static final String BAD_URL = "BAD_URL";
     /** 받는 도중 예상 못 한 예외. 다음 실행이 같은 공고에서 멈추지 않게 표시만 한다 */
     public static final String FETCH_ERR = "FETCH_ERR";
+    /** 응답이 크기 상한을 넘어 읽지 않음 */
+    public static final String TOO_BIG = "TOO_BIG";
 
     /** 첨부를 못 받았거나 못 읽은 경우. 값 없이 사유만 남긴다 */
     public static NoticeDoc failed(String status) {

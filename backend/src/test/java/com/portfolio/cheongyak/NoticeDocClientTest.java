@@ -17,6 +17,7 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Pattern;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -36,6 +37,8 @@ class NoticeDocClientTest {
         client = new NoticeDocClient();
         ReflectionTestUtils.setField(client, "sleeper", (NoticeDocClient.Sleeper) ms -> { });
         ReflectionTestUtils.setField(client, "attachLink", Pattern.compile(Pattern.quote(base) + "/att\\?[^\"'\\s<>]+"));
+        // 가짜 서버가 127.0.0.1 이라 호스트 제한을 여기로 바꾼다
+        ReflectionTestUtils.setField(client, "allowedHost", Pattern.compile("127\\.0\\.0\\.1"));
     }
 
     @AfterEach
@@ -74,6 +77,30 @@ class NoticeDocClientTest {
 
     private static byte[] utf8(String s) {
         return s.getBytes(StandardCharsets.UTF_8);
+    }
+
+    @Test
+    @DisplayName("applyhome 밖 호스트는 요청하지 않고 BAD_URL")
+    void foreignHostIsBadUrl() {
+        AtomicInteger hits = new AtomicInteger();
+        server.createContext("/detail", ex -> {
+            hits.incrementAndGet();
+            ex.sendResponseHeaders(500, -1);
+        });
+        ReflectionTestUtils.setField(client, "allowedHost", Pattern.compile("(?:[a-z0-9-]+\\.)*applyhome\\.co\\.kr"));
+
+        assertThat(client.download(base + "/detail").status()).isEqualTo("BAD_URL");
+        assertThat(hits).hasValue(0);
+    }
+
+    @Test
+    @DisplayName("상한을 넘는 첨부는 PDFBox 에 넘기지 않고 TOO_BIG")
+    void oversizedAttachmentIsTooBig() throws IOException {
+        ReflectionTestUtils.setField(client, "maxBytes", 200);
+        serve("/detail", 200, null, utf8("<a href=\"" + base + "/att?no=1\">공고문</a>"));
+        serve("/att", 200, null, pdf("BODY"));
+
+        assertThat(client.download(base + "/detail").status()).isEqualTo("TOO_BIG");
     }
 
     @Test
