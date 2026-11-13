@@ -17,6 +17,7 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Pattern;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -36,6 +37,8 @@ class NoticeDocClientTest {
         client = new NoticeDocClient();
         ReflectionTestUtils.setField(client, "sleeper", (NoticeDocClient.Sleeper) ms -> { });
         ReflectionTestUtils.setField(client, "attachLink", Pattern.compile(Pattern.quote(base) + "/att\\?[^\"'\\s<>]+"));
+        // 가짜 서버가 127.0.0.1 이라 호스트 제한을 여기로 바꾼다
+        ReflectionTestUtils.setField(client, "allowedHost", Pattern.compile("127\\.0\\.0\\.1"));
     }
 
     @AfterEach
@@ -74,6 +77,93 @@ class NoticeDocClientTest {
 
     private static byte[] utf8(String s) {
         return s.getBytes(StandardCharsets.UTF_8);
+    }
+
+    @Test
+    @DisplayName("applyhome 밖 호스트는 요청하지 않고 BAD_URL")
+    void foreignHostIsBadUrl() {
+        AtomicInteger hits = new AtomicInteger();
+        server.createContext("/detail", ex -> {
+            hits.incrementAndGet();
+            ex.sendResponseHeaders(500, -1);
+        });
+        ReflectionTestUtils.setField(client, "allowedHost", Pattern.compile("(?:[a-z0-9-]+\\.)*applyhome\\.co\\.kr"));
+
+        assertThat(client.download(base + "/detail").status()).isEqualTo("BAD_URL");
+        assertThat(hits).hasValue(0);
+    }
+
+    @Test
+    @DisplayName("허용 호스트 밖으로 가는 리다이렉트는 따라가지 않고 BAD_URL")
+    void redirectToForeignHostIsNotFollowed() {
+        AtomicInteger hits = new AtomicInteger();
+        String foreign = base.replace("127.0.0.1", "localhost");
+        server.createContext("/out", ex -> {
+            hits.incrementAndGet();
+            ex.sendResponseHeaders(500, -1);
+        });
+        server.createContext("/detail", ex -> {
+            ex.getResponseHeaders().add("Location", foreign + "/out");
+            ex.sendResponseHeaders(302, -1);
+        });
+
+        assertThat(client.download(base + "/detail").status()).isEqualTo("BAD_URL");
+        assertThat(hits).hasValue(0);
+    }
+
+    @Test
+    @DisplayName("허용 호스트 안의 리다이렉트는 따라간다")
+    void redirectWithinHostIsFollowed() throws IOException {
+        server.createContext("/detail", ex -> {
+            ex.getResponseHeaders().add("Location", "/detail2");
+            ex.sendResponseHeaders(302, -1);
+        });
+        serve("/detail2", 200, null, utf8("<a href=\"" + base + "/att?no=1\">공고문</a>"));
+        serve("/att", 200, null, pdf("MOVED BODY"));
+
+        NoticeDocClient.Download d = client.download(base + "/detail");
+        assertThat(d.status()).isEqualTo("OK");
+        assertThat(d.text()).contains("MOVED BODY");
+    }
+
+    @Test
+    @DisplayName("상한을 넘는 첨부 하나는 건너뛰고 다음 첨부 PDF 를 읽는다")
+    void oversizedAttachmentIsSkipped() throws IOException {
+        byte[] small = pdf("NOTICE BODY");
+        ReflectionTestUtils.setField(client, "maxBytes", small.length + 100);
+        byte[] big = new byte[small.length + 500];
+        System.arraycopy(utf8("%PDF"), 0, big, 0, 4);
+        serve("/detail", 200, null, utf8("<a href=\"" + base + "/att?sn=1\">a</a><a href=\"" + base + "/att?sn=2\">b</a>"));
+        server.createContext("/att", ex -> {
+            byte[] body = ex.getRequestURI().getQuery().contains("sn=1") ? big : small;
+            ex.sendResponseHeaders(200, body.length);
+            try (OutputStream out = ex.getResponseBody()) {
+                out.write(body);
+            }
+        });
+
+        NoticeDocClient.Download d = client.download(base + "/detail");
+        assertThat(d.status()).isEqualTo("OK");
+        assertThat(d.text()).contains("NOTICE BODY");
+    }
+
+    @Test
+    @DisplayName("상한을 넘는 첨부는 PDFBox 에 넘기지 않고 TOO_BIG")
+    void oversizedAttachmentIsTooBig() throws IOException {
+        ReflectionTestUtils.setField(client, "maxBytes", 200);
+        serve("/detail", 200, null, utf8("<a href=\"" + base + "/att?no=1\">공고문</a>"));
+        serve("/att", 200, null, pdf("BODY"));
+
+        assertThat(client.download(base + "/detail").status()).isEqualTo("TOO_BIG");
+    }
+
+    @Test
+    @DisplayName("첨부 파일명 퍼센트 인코딩이 깨졌으면 예외 대신 BAD_URL")
+    void badContentDispositionIsBadUrl() throws IOException {
+        serve("/detail", 200, null, utf8("<a href=\"" + base + "/att?no=1\">공고문</a>"));
+        serve("/att", 200, "attachment; filename*=UTF-8''%E0%A4%A", pdf("BODY"));
+
+        assertThat(client.download(base + "/detail").status()).isEqualTo("BAD_URL");
     }
 
     @Test

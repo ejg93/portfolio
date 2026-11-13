@@ -44,6 +44,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         { clipPath: [`circle(0 at ${x}px ${y}px)`, `circle(${radius}px at ${x}px ${y}px)`] },
         { duration: 500, easing: REVEAL_EASING, pseudoElement: '::view-transition-new(root)' },
       )
+    }).catch(() => {
+      // 빠르게 연타하면 전환이 건너뛰어져 ready 가 거부된다. 테마는 콜백에서 이미 바뀌었다
     })
   }
 

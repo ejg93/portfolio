@@ -7,9 +7,11 @@ import org.apache.pdfbox.text.PDFTextStripper;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.URI;
 import java.net.URLDecoder;
 import java.net.http.HttpClient;
+import java.net.http.HttpHeaders;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
@@ -17,6 +19,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -39,9 +42,19 @@ public class NoticeDocClient {
     record Download(String status, String text) {
     }
 
+    /** 받은 응답. 본문은 maxBytes 안이다 */
+    private record Fetched(int status, HttpHeaders headers, byte[] body) {
+    }
+
+    /** 본문이 maxBytes 를 넘음 */
+    private static final class TooBigException extends IOException {
+        private static final long serialVersionUID = 1L;
+    }
+
     private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(5);
     private static final Duration READ_TIMEOUT    = Duration.ofSeconds(90);
     private static final long GAP_MILLIS = 1000;
+    private static final int MAX_REDIRECTS = 3;
     private static final String USER_AGENT = "Mozilla/5.0";
     private static final Pattern FILENAME_STAR = Pattern.compile("filename\\*=UTF-8''([^;]+)", Pattern.CASE_INSENSITIVE);
     private static final Pattern FILENAME_PLAIN = Pattern.compile("filename=\"([^\"]+)\"", Pattern.CASE_INSENSITIVE);
@@ -49,8 +62,12 @@ public class NoticeDocClient {
     // 상세 화면 HTML 안의 첨부 링크. 테스트가 가짜 서버 주소로 바꾼다
     private Pattern attachLink = Pattern.compile("https://static\\.applyhome\\.co\\.kr/ai/aia/getAtchmnfl\\.do\\?[^\"'\\s<>]+");
     private Sleeper sleeper = Thread::sleep;
+    // 청약홈 밖으로는 요청하지 않는다. 리다이렉트는 직접 따라가며 매 주소를 본다. 테스트가 가짜 서버 주소로 바꾼다
+    private Pattern allowedHost = Pattern.compile("(?:[a-z0-9-]+\\.)*applyhome\\.co\\.kr");
+    // 공고문 PDF 는 수 MB 다. 이를 크게 넘는 응답은 메모리를 지키려고 읽지 않는다. 테스트가 줄인다
+    private int maxBytes = 30 * 1024 * 1024;
     private final HttpClient httpClient = HttpClient.newBuilder()
-            .connectTimeout(CONNECT_TIMEOUT).followRedirects(HttpClient.Redirect.NORMAL).build();
+            .connectTimeout(CONNECT_TIMEOUT).followRedirects(HttpClient.Redirect.NEVER).build();
 
     public NoticeDoc fetch(String kind, String pblancUrl) {
         Download d = download(pblancUrl);
@@ -66,21 +83,29 @@ public class NoticeDocClient {
             return new Download("NO_LINK", null);
         }
         try {
-            HttpResponse<byte[]> page = get(pblancUrl);
-            if (page.statusCode() != 200) {
-                return new Download("HTTP_" + page.statusCode(), null);
+            Fetched page = get(pblancUrl);
+            if (page.status() != 200) {
+                return new Download("HTTP_" + page.status(), null);
             }
             List<String> links = links(new String(page.body(), StandardCharsets.UTF_8));
             if (links.isEmpty()) {
                 return new Download("NO_LINK", null);
             }
             byte[] chosen = null;
+            boolean tooBig = false;
             for (String link : links) {
-                HttpResponse<byte[]> att = get(link);
-                if (att.statusCode() != 200 || !isPdf(att.body())) {
+                Fetched att;
+                try {
+                    att = get(link);
+                } catch (TooBigException e) {
+                    // 안내 책자 같은 큰 첨부 뒤에 공고문 PDF 가 올 수 있다
+                    tooBig = true;
                     continue;
                 }
-                boolean notice = filename(att).contains("모집공고");
+                if (att.status() != 200 || !isPdf(att.body())) {
+                    continue;
+                }
+                boolean notice = filename(att.headers()).contains("모집공고");
                 if (chosen == null || notice) {
                     chosen = att.body();
                 }
@@ -89,7 +114,7 @@ public class NoticeDocClient {
                 }
             }
             if (chosen == null) {
-                return new Download("NO_PDF", null);
+                return new Download(tooBig ? NoticeDoc.TOO_BIG : "NO_PDF", null);
             }
             try (PDDocument doc = Loader.loadPDF(chosen)) {
                 return new Download(NoticeDoc.OK, new PDFTextStripper().getText(doc));
@@ -97,6 +122,13 @@ public class NoticeDocClient {
                 log.warn("공고문 PDF 를 못 읽었다 - {}", e.getClass().getSimpleName());
                 return new Download("PARSE_ERR", null);
             }
+        } catch (IllegalArgumentException e) {
+            // URI.create·URLDecoder 가 깨진 주소·헤더에서, checkHost 가 청약홈 밖 주소에서 던진다
+            log.warn("청약홈 공고문 주소·헤더 거부 - {}", e.getClass().getSimpleName());
+            return new Download(NoticeDoc.BAD_URL, null);
+        } catch (TooBigException e) {
+            log.warn("청약홈 공고문 응답이 {} 바이트를 넘어 버렸다", maxBytes);
+            return new Download(NoticeDoc.TOO_BIG, null);
         } catch (IOException e) {
             log.warn("청약홈 공고문 요청 실패 - {}", e.getClass().getSimpleName());
             return new Download("HTTP_ERR", null);
@@ -106,11 +138,40 @@ public class NoticeDocClient {
         }
     }
 
-    private HttpResponse<byte[]> get(String url) throws IOException, InterruptedException {
-        sleeper.sleep(GAP_MILLIS);
-        HttpRequest req = HttpRequest.newBuilder(URI.create(url))
-                .timeout(READ_TIMEOUT).header("User-Agent", USER_AGENT).GET().build();
-        return httpClient.send(req, HttpResponse.BodyHandlers.ofByteArray());
+    /** 리다이렉트는 MAX_REDIRECTS 번까지 따라간다. 넘으면 3xx 상태를 그대로 돌려준다 */
+    private Fetched get(String url) throws IOException, InterruptedException {
+        URI uri = URI.create(url);
+        for (int hop = 0;; hop++) {
+            checkHost(uri);
+            sleeper.sleep(GAP_MILLIS);
+            HttpRequest req = HttpRequest.newBuilder(uri)
+                    .timeout(READ_TIMEOUT).header("User-Agent", USER_AGENT).GET().build();
+            HttpResponse<InputStream> res = httpClient.send(req, HttpResponse.BodyHandlers.ofInputStream());
+            try (InputStream in = res.body()) {
+                Optional<String> location = res.headers().firstValue("Location");
+                if (res.statusCode() / 100 == 3 && location.isPresent() && hop < MAX_REDIRECTS) {
+                    uri = uri.resolve(location.get());
+                    continue;
+                }
+                return new Fetched(res.statusCode(), res.headers(), read(in));
+            }
+        }
+    }
+
+    private byte[] read(InputStream in) throws IOException {
+        byte[] body = in.readNBytes(maxBytes + 1);
+        if (body.length > maxBytes) {
+            throw new TooBigException();
+        }
+        return body;
+    }
+
+    /** 허용 호스트가 아니면 IllegalArgumentException */
+    private void checkHost(URI uri) {
+        String host = uri.getHost();
+        if (host == null || !allowedHost.matcher(host).matches()) {
+            throw new IllegalArgumentException("허용하지 않는 호스트");
+        }
     }
 
     private List<String> links(String html) {
@@ -127,8 +188,8 @@ public class NoticeDocClient {
     }
 
     /** Content-Disposition 파일명. filename*=UTF-8''(퍼센트 인코딩) 과 filename="…"(UTF-8 원문) 두 꼴이 온다 */
-    private static String filename(HttpResponse<?> res) {
-        String cd = res.headers().firstValue("Content-Disposition").orElse("");
+    private static String filename(HttpHeaders headers) {
+        String cd = headers.firstValue("Content-Disposition").orElse("");
         Matcher star = FILENAME_STAR.matcher(cd);
         if (star.find()) {
             return URLDecoder.decode(star.group(1), StandardCharsets.UTF_8);

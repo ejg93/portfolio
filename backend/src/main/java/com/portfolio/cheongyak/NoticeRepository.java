@@ -1,5 +1,6 @@
 package com.portfolio.cheongyak;
 
+import com.portfolio.cheongyak.dto.JudgeRequest;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.jdbc.support.GeneratedKeyHolder;
@@ -19,7 +20,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
-import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -82,19 +82,25 @@ public class NoticeRepository {
 
     /** 없으면 INSERT(1), raw 가 다르면 UPDATE(2, first_seen_at 보존·doc_* 비움), 같으면 아무것도 안 함(0) */
     public int upsertNotice(Notice n) {
+        int change = noticeChange(n);
+        LocalDateTime now = now();
+        if (change == 1) {
+            jdbc.sql(INSERT_NOTICE).paramSource(params(n).addValue("firstSeenAt", now).addValue("updatedAt", now)).update();
+        } else if (change == 2) {
+            jdbc.sql(UPDATE_NOTICE).paramSource(params(n).addValue("updatedAt", now)).update();
+        }
+        return change;
+    }
+
+    /** 저장하면 어떻게 될지만 본다. 0 그대로 · 1 새 공고 · 2 raw 가 바뀜 */
+    public int noticeChange(Notice n) {
         Optional<String> raw = jdbc.sql("SELECT raw_json FROM cheongyak_notice WHERE house_manage_no = :h AND pblanc_no = :p")
                 .param("h", n.houseManageNo()).param("p", n.pblancNo())
                 .query(String.class).optional();
-        LocalDateTime now = now();
         if (raw.isEmpty()) {
-            jdbc.sql(INSERT_NOTICE).paramSource(params(n).addValue("firstSeenAt", now).addValue("updatedAt", now)).update();
             return 1;
         }
-        if (raw.get().equals(n.rawJson())) {
-            return 0;
-        }
-        jdbc.sql(UPDATE_NOTICE).paramSource(params(n).addValue("updatedAt", now)).update();
-        return 2;
+        return raw.get().equals(n.rawJson()) ? 0 : 2;
     }
 
     public void replaceHouseTypes(String hmn, String pno, List<HouseType> types) {
@@ -106,14 +112,15 @@ public class NoticeRepository {
     }
 
     /**
-     * 공고 한 건과 주택형을 한 트랜잭션으로 저장한다. 공고가 새로 들어왔거나 바뀌었을 때만 주택형을 다시 부른다.
+     * 공고 한 건과 주택형을 한 트랜잭션으로 저장한다. 공고가 새로 들어왔거나 바뀌었을 때만 주택형을 바꾼다.
+     * 주택형은 부르는 쪽이 noticeChange 로 보고 트랜잭션 밖에서 받아 온다 — 외부 HTTP 를 기다리는 동안 커넥션을 쥐지 않는다.
      * 수집 전체를 한 트랜잭션으로 묶지 않으려고 여기서 경계를 끊는다(다른 빈이라 프록시가 먹는다).
      */
     @Transactional
-    public int saveNoticeWithTypes(Notice n, Supplier<List<HouseType>> typesIfChanged) {
+    public int saveNoticeWithTypes(Notice n, List<HouseType> types) {
         int result = upsertNotice(n);
         if (result != 0) {
-            replaceHouseTypes(n.houseManageNo(), n.pblancNo(), typesIfChanged.get());
+            replaceHouseTypes(n.houseManageNo(), n.pblancNo(), types);
         }
         return result;
     }
@@ -137,6 +144,19 @@ public class NoticeRepository {
     public Optional<Notice> findNotice(String hmn, String pno) {
         return jdbc.sql("SELECT * FROM cheongyak_notice WHERE house_manage_no = :h AND pblanc_no = :p")
                 .param("h", hmn).param("p", pno).query(Notice.class).optional();
+    }
+
+    /** 요청한 키 순서대로. 없는 키는 빠지고 중복 키는 한 번만. 쿼리는 관리번호 IN 한 번 */
+    public List<Notice> findNoticesByKeys(List<JudgeRequest.Key> keys) {
+        if (keys.isEmpty()) {
+            return List.of();
+        }
+        List<String> hmns = keys.stream().map(JudgeRequest.Key::houseManageNo).distinct().toList();
+        Map<String, Notice> byKey = jdbc.sql("SELECT * FROM cheongyak_notice WHERE house_manage_no IN (:hmns)")
+                .param("hmns", hmns).query(Notice.class).list().stream()
+                .collect(Collectors.toMap(Notice::key, Function.identity()));
+        return keys.stream().map(k -> k.houseManageNo() + ":" + k.pblancNo()).distinct()
+                .map(byKey::get).filter(n -> n != null).toList();
     }
 
     /** key = 공고 key(). 주택형은 model_no 순 */

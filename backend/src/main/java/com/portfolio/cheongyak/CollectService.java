@@ -37,14 +37,17 @@ public class CollectService {
 
     private static final List<ApplyhomeKind> KINDS = List.of(
             ApplyhomeKind.APT, ApplyhomeKind.REMNDR, ApplyhomeKind.URBTY, ApplyhomeKind.PBLPVT, ApplyhomeKind.OPT);
-    // 이보다 오래 RUNNING 이면 재기동 등으로 버려진 것으로 본다
-    private static final long STALE_MINUTES = 60;
+    // 이보다 오래 RUNNING 이면 재기동 등으로 버려진 것으로 본다. 공고문 단계가 150건 × (1초 + 첨부당 최대 90초)라
+    // 한 시간을 넘길 수 있다. 수집은 하루 한 번이라 6시간이면 다음 cron 전에 풀린다
+    private static final long STALE_MINUTES = 360;
     private static final int FIRST_WINDOW_DAYS = 365;
     // 접수일 정정이 공고 뒤 한 달 남짓 이어진다
     private static final int NEXT_WINDOW_DAYS = 45;
     private static final int ERROR_MAX = 1000;
     // 발표 뒤 이 안에 결과가 비어 있으면 다음 실행에 다시 본다. 지나면 NONE
     private static final int RESULT_GRACE_DAYS = 14;
+    // 결과 받기가 이만큼 연달아 실패하면 개별 공고 문제가 아니라 장애로 보고 단계를 끝낸다
+    private static final int RESULT_FAIL_STREAK = 3;
     // 이보다 오래된 공고의 결과는 받지 않는다
     private static final int RESULT_WINDOW_DAYS = 365;
     // 접수가 끝난 지 이 안인 공고까지 시세를 본다
@@ -137,8 +140,12 @@ public class CollectService {
                     if (n.houseManageNo() == null || n.pblancNo() == null) {
                         continue;
                     }
-                    int r = repo.saveNoticeWithTypes(n,
-                            () -> NoticeMapper.toHouseTypes(kind, n, client.fetchHouseTypes(kind, n.pblancNo())));
+                    List<HouseType> types = List.of();
+                    if (repo.noticeChange(n) != 0) {
+                        types = NoticeMapper.toHouseTypes(kind, n, client.fetchHouseTypes(kind, n.pblancNo()));
+                        pause(GAP_ODCLOUD_MS);
+                    }
+                    int r = repo.saveNoticeWithTypes(n, types);
                     fetched++;
                     inserted += r == 1 ? 1 : 0;
                     updated += r == 2 ? 1 : 0;
@@ -158,7 +165,17 @@ public class CollectService {
         int docOk = 0;
         try {
             for (Notice n : repo.judgeTargetsWithoutDoc(docBatch)) {
-                NoticeDoc doc = docClient.fetch(n.kind(), n.pblancUrl());
+                NoticeDoc doc;
+                try {
+                    doc = docClient.fetch(n.kind(), n.pblancUrl());
+                } catch (RuntimeException e) {
+                    log.warn("수집 {} 공고문 받기 실패 {}:{} — {}", id, n.houseManageNo(), n.pblancNo(), e.getClass().getSimpleName());
+                    doc = NoticeDoc.failed(NoticeDoc.FETCH_ERR);
+                }
+                // 종료 중이면 남은 공고가 전부 HTTP_ERR 로 굳는다. 표시하지 않고 다음 실행에 넘긴다
+                if (Thread.currentThread().isInterrupted()) {
+                    break;
+                }
                 try {
                     repo.updateDoc(n.houseManageNo(), n.pblancNo(), doc);
                 } catch (DataIntegrityViolationException e) {
@@ -196,25 +213,47 @@ public class CollectService {
         LocalDate since = today.minusDays(RESULT_WINDOW_DAYS);
         int fetched = 0;
         int ok = 0;
+        int failStreak = 0;
         try {
             for (Notice n : repo.resultTargets(today, since, resultBatch)) {
                 String hmn = n.houseManageNo();
                 String pno = n.pblancNo();
                 boolean apt = ApplyhomeKind.APT.name().equals(n.kind());
-                List<CmpetRow> cmpet = client.fetchCmpet(apt ? ApplyhomeKind.APT : ApplyhomeKind.REMNDR, hmn, pno).stream()
-                        .map(d -> NoticeMapper.toCmpet(hmn, pno, d)).toList();
-                pause(GAP_ODCLOUD_MS);
+                List<CmpetRow> cmpet;
                 List<ScoreRow> scores = List.of();
-                if (apt) {
-                    scores = client.fetchScores(hmn, pno).stream().map(d -> NoticeMapper.toScore(hmn, pno, d)).toList();
+                try {
+                    cmpet = client.fetchCmpet(apt ? ApplyhomeKind.APT : ApplyhomeKind.REMNDR, hmn, pno).stream()
+                            .map(d -> NoticeMapper.toCmpet(hmn, pno, d)).toList();
                     pause(GAP_ODCLOUD_MS);
+                    if (apt) {
+                        scores = client.fetchScores(hmn, pno).stream().map(d -> NoticeMapper.toScore(hmn, pno, d)).toList();
+                        pause(GAP_ODCLOUD_MS);
+                    }
+                } catch (RuntimeException e) {
+                    // pause 의 중단 신호는 단계를 끝내야 한다
+                    if (Thread.currentThread().isInterrupted()) {
+                        throw e;
+                    }
+                    // 같은 공고가 발표일 순으로 매번 먼저 오니, 여기서 단계를 끝내면 뒤 공고는 영영 못 받는다
+                    log.warn("수집 {} 결과 {}:{} 건너뜀 — {}", id, hmn, pno, e.getClass().getSimpleName());
+                    if (++failStreak >= RESULT_FAIL_STREAK) {
+                        log.warn("수집 {} 결과 {}건 연속 실패 — 단계 중단", id, failStreak);
+                        break;
+                    }
+                    pause(GAP_ODCLOUD_MS);
+                    continue;
                 }
+                failStreak = 0;
                 fetched++;
-                if (!cmpet.isEmpty() || !scores.isEmpty()) {
-                    repo.replaceResults(hmn, pno, cmpet, scores, RESULT_OK);
-                    ok++;
-                } else if (n.przwnerDe().plusDays(RESULT_GRACE_DAYS).isBefore(today)) {
-                    repo.replaceResults(hmn, pno, cmpet, scores, RESULT_NONE);
+                try {
+                    if (!cmpet.isEmpty() || !scores.isEmpty()) {
+                        repo.replaceResults(hmn, pno, cmpet, scores, RESULT_OK);
+                        ok++;
+                    } else if (n.przwnerDe().plusDays(RESULT_GRACE_DAYS).isBefore(today)) {
+                        repo.replaceResults(hmn, pno, cmpet, scores, RESULT_NONE);
+                    }
+                } catch (DataIntegrityViolationException e) {
+                    log.warn("수집 {} 결과 저장 실패 {}:{} — {}", id, hmn, pno, e.getClass().getSimpleName());
                 }
             }
         } catch (RuntimeException e) {
