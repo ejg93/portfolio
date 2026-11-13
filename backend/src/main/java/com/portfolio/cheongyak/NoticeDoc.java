@@ -25,9 +25,9 @@ public record NoticeDoc(
     public static final String OK = "OK";
     /** 받아서 뽑았지만 컬럼에 안 들어가 저장 못 함 */
     public static final String SAVE_ERR = "SAVE_ERR";
-    /** 공고 주소나 첨부 헤더가 깨져 요청·해석을 못 함 */
+    /** 공고 주소·리다이렉트가 청약홈 밖이거나, 주소·첨부 헤더가 깨져 요청·해석을 못 함 */
     public static final String BAD_URL = "BAD_URL";
-    /** 받는 도중 예상 못 한 예외. 다음 실행이 같은 공고에서 멈추지 않게 표시만 한다 */
+    /** 받는 도중 예상 못 한 예외 */
     public static final String FETCH_ERR = "FETCH_ERR";
     /** 응답이 크기 상한을 넘어 읽지 않음 */
     public static final String TOO_BIG = "TOO_BIG";

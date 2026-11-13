@@ -46,6 +46,8 @@ public class CollectService {
     private static final int ERROR_MAX = 1000;
     // 발표 뒤 이 안에 결과가 비어 있으면 다음 실행에 다시 본다. 지나면 NONE
     private static final int RESULT_GRACE_DAYS = 14;
+    // 결과 받기가 이만큼 연달아 실패하면 개별 공고 문제가 아니라 장애로 보고 단계를 끝낸다
+    private static final int RESULT_FAIL_STREAK = 3;
     // 이보다 오래된 공고의 결과는 받지 않는다
     private static final int RESULT_WINDOW_DAYS = 365;
     // 접수가 끝난 지 이 안인 공고까지 시세를 본다
@@ -167,9 +169,12 @@ public class CollectService {
                 try {
                     doc = docClient.fetch(n.kind(), n.pblancUrl());
                 } catch (RuntimeException e) {
-                    // 표시를 안 하면 다음 실행도 같은 공고를 먼저 집어 단계가 매번 여기서 멈춘다
                     log.warn("수집 {} 공고문 받기 실패 {}:{} — {}", id, n.houseManageNo(), n.pblancNo(), e.getClass().getSimpleName());
                     doc = NoticeDoc.failed(NoticeDoc.FETCH_ERR);
+                }
+                // 종료 중이면 남은 공고가 전부 HTTP_ERR 로 굳는다. 표시하지 않고 다음 실행에 넘긴다
+                if (Thread.currentThread().isInterrupted()) {
+                    break;
                 }
                 try {
                     repo.updateDoc(n.houseManageNo(), n.pblancNo(), doc);
@@ -208,6 +213,7 @@ public class CollectService {
         LocalDate since = today.minusDays(RESULT_WINDOW_DAYS);
         int fetched = 0;
         int ok = 0;
+        int failStreak = 0;
         try {
             for (Notice n : repo.resultTargets(today, since, resultBatch)) {
                 String hmn = n.houseManageNo();
@@ -230,14 +236,24 @@ public class CollectService {
                     }
                     // 같은 공고가 발표일 순으로 매번 먼저 오니, 여기서 단계를 끝내면 뒤 공고는 영영 못 받는다
                     log.warn("수집 {} 결과 {}:{} 건너뜀 — {}", id, hmn, pno, e.getClass().getSimpleName());
+                    if (++failStreak >= RESULT_FAIL_STREAK) {
+                        log.warn("수집 {} 결과 {}건 연속 실패 — 단계 중단", id, failStreak);
+                        break;
+                    }
+                    pause(GAP_ODCLOUD_MS);
                     continue;
                 }
+                failStreak = 0;
                 fetched++;
-                if (!cmpet.isEmpty() || !scores.isEmpty()) {
-                    repo.replaceResults(hmn, pno, cmpet, scores, RESULT_OK);
-                    ok++;
-                } else if (n.przwnerDe().plusDays(RESULT_GRACE_DAYS).isBefore(today)) {
-                    repo.replaceResults(hmn, pno, cmpet, scores, RESULT_NONE);
+                try {
+                    if (!cmpet.isEmpty() || !scores.isEmpty()) {
+                        repo.replaceResults(hmn, pno, cmpet, scores, RESULT_OK);
+                        ok++;
+                    } else if (n.przwnerDe().plusDays(RESULT_GRACE_DAYS).isBefore(today)) {
+                        repo.replaceResults(hmn, pno, cmpet, scores, RESULT_NONE);
+                    }
+                } catch (DataIntegrityViolationException e) {
+                    log.warn("수집 {} 결과 저장 실패 {}:{} — {}", id, hmn, pno, e.getClass().getSimpleName());
                 }
             }
         } catch (RuntimeException e) {

@@ -140,6 +140,24 @@ class CollectServiceTest {
     }
 
     @Test
+    @DisplayName("공고문 단계 중 중단 신호가 오면 남은 공고를 실패로 표시하지 않고 멈춘다")
+    void interruptStopsDocStage() {
+        fiveKinds();
+        when(docClient.fetch(anyString(), anyString())).thenAnswer(inv -> {
+            Thread.currentThread().interrupt();
+            return NoticeDoc.failed("HTTP_ERR");
+        });
+        try {
+            service.run(running(), SINCE);
+        } finally {
+            Thread.interrupted();
+        }
+        verify(docClient, times(1)).fetch(anyString(), anyString());
+        assertThat(repo.findNotice("1", "1").orElseThrow().docStatus()).isNull();
+        assertThat(repo.findNotice("2", "2").orElseThrow().docStatus()).isNull();
+    }
+
+    @Test
     @DisplayName("추출값이 컬럼(30자)에 안 들어가는 공고는 SAVE_ERR 로 표시하고 다음 공고문을 계속 받는다")
     void docSaveErrorDoesNotStopOthers() {
         fiveKinds();

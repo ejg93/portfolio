@@ -140,6 +140,38 @@ class CollectStagesTest {
     }
 
     @Test
+    @DisplayName("결과가 컬럼에 안 들어가는 공고 하나는 건너뛰고 다음 공고 결과는 저장한다")
+    void resultSaveErrorSkipsOnlyThatNotice() {
+        announced(Fixtures.apt("A1"), 2);
+        announced(Fixtures.apt("A2"), 10);
+        JsonNode longText = node("{\"HOUSE_TY\":\"084A\",\"RESIDE_SENM\":\"해당지역\",\"SUBSCRPT_RANK_CODE\":1,"
+                + "\"SUPLY_HSHLDCO\":10,\"REQ_CNT\":\"120\",\"CMPET_RATE\":\"" + "가".repeat(40) + "\"}");
+        when(client.fetchCmpet(any(), eq("A1"), anyString())).thenReturn(List.of(longText));
+        when(client.fetchCmpet(any(), eq("A2"), anyString())).thenReturn(List.of(CMPET));
+        when(client.fetchScores(anyString(), anyString())).thenReturn(List.of(SCORE));
+
+        CollectRun r = run();
+
+        assertThat(r).extracting(CollectRun::status, CollectRun::resultOk).containsExactly(CollectRun.OK, 1);
+        Notice a2 = repo.findNotice("A2", "A2").orElseThrow();
+        assertThat(repo.findScores(List.of(a2)).get(a2.key())).extracting(ScoreRow::minScore).containsExactly(52);
+    }
+
+    @Test
+    @DisplayName("결과 받기가 3건 연달아 실패하면 장애로 보고 단계를 끝낸다")
+    void resultFailStreakStopsStage() {
+        for (int i = 1; i <= 5; i++) {
+            announced(Fixtures.apt("A" + i), i);
+        }
+        when(client.fetchCmpet(any(), anyString(), anyString()))
+                .thenThrow(new UpstreamException(HttpStatus.BAD_GATEWAY, "UPSTREAM_ERROR", "x"));
+
+        run();
+
+        verify(client, times(3)).fetchCmpet(any(), anyString(), anyString());
+    }
+
+    @Test
     @DisplayName("결과를 못 받은 공고 하나는 건너뛰고 다음 공고 결과는 받는다")
     void resultFailureSkipsOnlyThatNotice() {
         announced(Fixtures.apt("A1"), 2);
