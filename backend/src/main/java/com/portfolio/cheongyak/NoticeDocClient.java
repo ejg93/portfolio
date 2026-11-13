@@ -19,6 +19,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
 import java.util.regex.Matcher;
@@ -123,7 +124,7 @@ public class NoticeDocClient {
                 return new Download("PARSE_ERR", null);
             }
         } catch (IllegalArgumentException e) {
-            // URI.create·URLDecoder 가 깨진 주소·헤더에서, checkHost 가 청약홈 밖 주소에서 던진다
+            // URI.create 가 깨진 주소에서, checkHost 가 청약홈 밖 주소에서 던진다
             log.warn("청약홈 공고문 주소·헤더 거부 - {}", e.getClass().getSimpleName());
             return new Download(NoticeDoc.BAD_URL, null);
         } catch (TooBigException e) {
@@ -169,7 +170,8 @@ public class NoticeDocClient {
     /** 허용 호스트가 아니면 IllegalArgumentException */
     private void checkHost(URI uri) {
         String host = uri.getHost();
-        if (host == null || !allowedHost.matcher(host).matches()) {
+        // 호스트 이름은 대소문자를 가리지 않는다
+        if (host == null || !allowedHost.matcher(host.toLowerCase(Locale.ROOT)).matches()) {
             throw new IllegalArgumentException("허용하지 않는 호스트");
         }
     }
@@ -192,7 +194,12 @@ public class NoticeDocClient {
         String cd = headers.firstValue("Content-Disposition").orElse("");
         Matcher star = FILENAME_STAR.matcher(cd);
         if (star.find()) {
-            return URLDecoder.decode(star.group(1), StandardCharsets.UTF_8);
+            try {
+                return URLDecoder.decode(star.group(1), StandardCharsets.UTF_8);
+            } catch (IllegalArgumentException e) {
+                // 퍼센트 인코딩이 깨졌다. 이름만 못 읽은 것이라 filename="…" 이나 빈 이름으로 넘어가 PDF 는 그대로 쓴다
+                log.debug("첨부 파일명 퍼센트 인코딩이 깨졌다");
+            }
         }
         Matcher plain = FILENAME_PLAIN.matcher(cd);
         // 헤더는 ISO-8859-1 로 읽힌다. 원래 바이트로 되돌려 UTF-8 로 다시 읽는다

@@ -82,7 +82,11 @@ public class NoticeRepository {
 
     /** 없으면 INSERT(1), raw 가 다르면 UPDATE(2, first_seen_at 보존·doc_* 비움), 같으면 아무것도 안 함(0) */
     public int upsertNotice(Notice n) {
-        int change = noticeChange(n);
+        return write(n, noticeChange(n));
+    }
+
+    /** noticeChange 가 낸 change 대로 쓴다. 다시 SELECT 하지 않는다 */
+    private int write(Notice n, int change) {
         LocalDateTime now = now();
         if (change == 1) {
             jdbc.sql(INSERT_NOTICE).paramSource(params(n).addValue("firstSeenAt", now).addValue("updatedAt", now)).update();
@@ -114,11 +118,12 @@ public class NoticeRepository {
     /**
      * 공고 한 건과 주택형을 한 트랜잭션으로 저장한다. 공고가 새로 들어왔거나 바뀌었을 때만 주택형을 바꾼다.
      * 주택형은 부르는 쪽이 noticeChange 로 보고 트랜잭션 밖에서 받아 온다 — 외부 HTTP 를 기다리는 동안 커넥션을 쥐지 않는다.
+     * change 는 그때 본 값을 그대로 받는다. 여기서 다시 보면 그 사이 바뀐 공고를 받아 오지 않은 빈 주택형으로 덮는다.
      * 수집 전체를 한 트랜잭션으로 묶지 않으려고 여기서 경계를 끊는다(다른 빈이라 프록시가 먹는다).
      */
     @Transactional
-    public int saveNoticeWithTypes(Notice n, List<HouseType> types) {
-        int result = upsertNotice(n);
+    public int saveNoticeWithTypes(Notice n, int change, List<HouseType> types) {
+        int result = write(n, change);
         if (result != 0) {
             replaceHouseTypes(n.houseManageNo(), n.pblancNo(), types);
         }
