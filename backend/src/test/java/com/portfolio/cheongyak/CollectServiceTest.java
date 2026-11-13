@@ -58,6 +58,7 @@ class CollectServiceTest {
         jdbc.sql("DELETE FROM cheongyak_collect_run").update();
         ReflectionTestUtils.setField(service, "worker", (Executor) Runnable::run);
         ReflectionTestUtils.setField(service, "docBatch", 150);
+        ReflectionTestUtils.setField(service, "sleeper", (NoticeDocClient.Sleeper) ms -> { });
         when(client.fetchHouseTypes(any(), anyString())).thenReturn(List.of(node(
                 "{\"MODEL_NO\":\"01\",\"HOUSE_TY\":\"084.9700A\",\"SUPLY_HSHLDCO\":10,\"SPSPLY_HSHLDCO\":5,\"LTTOT_TOP_AMOUNT\":\"55,000\"}")));
         when(docClient.fetch(anyString(), anyString()))
@@ -175,6 +176,14 @@ class CollectServiceTest {
     }
 
     @Test
+    @DisplayName("2시간 전 RUNNING 은 공고문 단계가 길어진 것일 수 있어 살아 있는 것으로 본다")
+    void runningUnderSixHoursIsBusy() {
+        repo.insertRun(CollectRun.builder().startedAt(NoticeRepository.now().minusMinutes(120))
+                .status(CollectRun.RUNNING).triggerSrc("cron").sinceDate(SINCE).build());
+        assertThatThrownBy(() -> service.start("cron")).isInstanceOf(CollectBusyException.class);
+    }
+
+    @Test
     @DisplayName("RUNNING 이 있으면 시작하지 않는다")
     void busy() {
         running();
@@ -182,9 +191,9 @@ class CollectServiceTest {
     }
 
     @Test
-    @DisplayName("61분 전 RUNNING 은 버려진 것으로 닫고 새로 시작한다. 첫 실행은 365일 창")
+    @DisplayName("361분 전 RUNNING 은 버려진 것으로 닫고 새로 시작한다. 첫 실행은 365일 창")
     void staleRunIsClosed() {
-        long stale = repo.insertRun(CollectRun.builder().startedAt(NoticeRepository.now().minusMinutes(61))
+        long stale = repo.insertRun(CollectRun.builder().startedAt(NoticeRepository.now().minusMinutes(361))
                 .status(CollectRun.RUNNING).triggerSrc("cron").sinceDate(SINCE).build());
         CollectRun started = service.start("cron");
 

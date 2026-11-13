@@ -37,8 +37,9 @@ public class CollectService {
 
     private static final List<ApplyhomeKind> KINDS = List.of(
             ApplyhomeKind.APT, ApplyhomeKind.REMNDR, ApplyhomeKind.URBTY, ApplyhomeKind.PBLPVT, ApplyhomeKind.OPT);
-    // 이보다 오래 RUNNING 이면 재기동 등으로 버려진 것으로 본다
-    private static final long STALE_MINUTES = 60;
+    // 이보다 오래 RUNNING 이면 재기동 등으로 버려진 것으로 본다. 공고문 단계가 150건 × (1초 + 첨부당 최대 90초)라
+    // 한 시간을 넘길 수 있다. 수집은 하루 한 번이라 6시간이면 다음 cron 전에 풀린다
+    private static final long STALE_MINUTES = 360;
     private static final int FIRST_WINDOW_DAYS = 365;
     // 접수일 정정이 공고 뒤 한 달 남짓 이어진다
     private static final int NEXT_WINDOW_DAYS = 45;
@@ -137,8 +138,12 @@ public class CollectService {
                     if (n.houseManageNo() == null || n.pblancNo() == null) {
                         continue;
                     }
-                    int r = repo.saveNoticeWithTypes(n,
-                            () -> NoticeMapper.toHouseTypes(kind, n, client.fetchHouseTypes(kind, n.pblancNo())));
+                    List<HouseType> types = List.of();
+                    if (repo.noticeChange(n) != 0) {
+                        types = NoticeMapper.toHouseTypes(kind, n, client.fetchHouseTypes(kind, n.pblancNo()));
+                        pause(GAP_ODCLOUD_MS);
+                    }
+                    int r = repo.saveNoticeWithTypes(n, types);
                     fetched++;
                     inserted += r == 1 ? 1 : 0;
                     updated += r == 2 ? 1 : 0;

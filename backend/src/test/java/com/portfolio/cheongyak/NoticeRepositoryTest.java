@@ -12,7 +12,6 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -61,20 +60,24 @@ class NoticeRepositoryTest {
     }
 
     @Test
-    @DisplayName("공고가 그대로면(0) 주택형을 다시 부르지 않는다")
-    void saveWithTypesSkipsSupplierWhenUnchanged() {
+    @DisplayName("공고가 그대로면(0) 넘긴 주택형이 비어도 저장된 주택형을 지우지 않는다")
+    void unchangedNoticeKeepsTypes() {
         Notice n = Fixtures.apt("A1").build();
-        AtomicInteger calls = new AtomicInteger();
-        repo.saveNoticeWithTypes(n, () -> {
-            calls.incrementAndGet();
-            return List.of(Fixtures.type(n, "01", 84.97).build());
-        });
-        repo.saveNoticeWithTypes(n, () -> {
-            calls.incrementAndGet();
-            return List.of();
-        });
-        assertThat(calls).hasValue(1);
+        assertThat(repo.saveNoticeWithTypes(n, List.of(Fixtures.type(n, "01", 84.97).build()))).isEqualTo(1);
+        assertThat(repo.saveNoticeWithTypes(n, List.of())).isZero();
         assertThat(repo.findHouseTypes(List.of(n)).get(n.key())).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("noticeChange — 없으면 1, raw 가 같으면 0, 다르면 2. 쓰지 않는다")
+    void noticeChange() {
+        Notice n = Fixtures.apt("A1").build();
+        assertThat(repo.noticeChange(n)).isEqualTo(1);
+        assertThat(repo.findNotice("A1", "A1")).isEmpty();
+        repo.upsertNotice(n);
+        assertThat(repo.noticeChange(n)).isZero();
+        assertThat(repo.noticeChange(n.toBuilder().rawJson("{\"id\":\"changed\"}").build())).isEqualTo(2);
+        assertThat(repo.findNotice("A1", "A1").orElseThrow().rawJson()).isEqualTo(n.rawJson());
     }
 
     @Test
