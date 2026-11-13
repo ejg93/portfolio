@@ -15,6 +15,8 @@ const DEFAULT_COND: Cond = {
 }
 const DEFAULT_FILTERS: Filters = { area: 'capital', kind: 'all', period: 90, rcpt: 'live', size: 'all', result: 'all' }
 const RANK: Record<Status, number> = { RANK1: 3, RANK2: 2, INELIGIBLE: 1, NOT_APPLICABLE: 0 }
+// 백엔드는 오프셋 없는 KST 벽시계 시각을 준다. 그대로 Date 에 넣으면 브라우저 로컬 시각으로 읽힌다
+const kstMs = (s: string) => new Date(/[zZ]|[+-]\d\d:?\d\d$/.test(s) ? s : `${s}+09:00`).getTime()
 const AREA_LABEL: Record<Filters['area'], string> = { capital: '수도권', 서울: '서울', 경기: '경기', 인천: '인천', all: '전국' }
 
 type Chip<K extends keyof Filters> = { key: K; label: string; options: [Filters[K], string][] }
@@ -302,7 +304,7 @@ export default function CheongyakPage() {
   const latestScore = judgeState.results.find((j) => j.score)?.score ?? null
 
   const lastOk = runs.list?.find((r) => r.status === 'OK')
-  const hoursAgo = lastOk?.finishedAt ? Math.max(0, Math.round((runs.at - new Date(lastOk.finishedAt).getTime()) / 36e5)) : null
+  const hoursAgo = lastOk?.finishedAt ? Math.max(0, Math.round((runs.at - kstMs(lastOk.finishedAt)) / 36e5)) : null
 
   const field = (id: keyof Cond, label: string, type: 'number' | 'date') => (
     <label style={S.label} htmlFor={`c-${id}`}>

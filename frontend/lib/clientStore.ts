@@ -57,12 +57,12 @@ const memory = new Map<string, string>()
 /**
  * localStorage 에 둔 JSON 값을 상태처럼 쓴다. 스냅샷은 저장된 문자열이라 값이 같으면 같은 참조를 돌려준다
  * (객체를 스냅샷으로 쓰면 매번 새 객체라 무한히 다시 그린다). fallback 은 모듈 상수로 넘긴다.
- * 저장이 막히면 메모리에 두고, 읽기 실패·JSON 깨짐은 fallback 으로 읽는다.
+ * 저장에 실패한 값만 메모리에 두고 그것을 먼저 읽는다. 읽기 실패·JSON 깨짐은 fallback 으로 읽는다.
  */
 export function useStoredJson<T>(key: string, fallback: T) {
   const getSnapshot = useCallback(() => {
     try {
-      return localStorage.getItem(key) ?? memory.get(key) ?? null
+      return memory.get(key) ?? localStorage.getItem(key) ?? null
     } catch {
       return memory.get(key) ?? null
     }
@@ -82,11 +82,12 @@ export function useStoredJson<T>(key: string, fallback: T) {
   const set = useCallback(
     (next: T) => {
       const json = JSON.stringify(next)
-      memory.set(key, json)
       try {
         localStorage.setItem(key, json)
+        memory.delete(key)
       } catch {
-        // 메모리에 둔 값으로 이번 세션은 돈다
+        // 저장 못 한 값만 메모리에 둔다. 스냅샷이 메모리를 먼저 봐서 옛 저장값으로 되돌아가지 않는다
+        memory.set(key, json)
       }
       notify()
     },
