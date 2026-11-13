@@ -15,8 +15,9 @@ const DEFAULT_COND: Cond = {
 }
 const DEFAULT_FILTERS: Filters = { area: 'capital', kind: 'all', period: 90, rcpt: 'live', size: 'all', result: 'all' }
 const RANK: Record<Status, number> = { RANK1: 3, RANK2: 2, INELIGIBLE: 1, NOT_APPLICABLE: 0 }
-// 백엔드는 오프셋 없는 KST 벽시계 시각을 준다. 그대로 Date 에 넣으면 브라우저 로컬 시각으로 읽힌다
-const kstMs = (s: string) => new Date(/[zZ]|[+-]\d\d:?\d\d$/.test(s) ? s : `${s}+09:00`).getTime()
+// 백엔드는 오프셋 없는 KST 벽시계 시각을 준다. 그대로 Date 에 넣으면 브라우저 로컬 시각으로 읽힌다.
+// 초 아래 자릿수는 버린다 — LocalDateTime 은 마이크로초 6자리까지 오는데 Date.parse 규격은 3자리다
+const kstMs = (s: string) => Date.parse(/[zZ]|[+-]\d\d:?\d\d$/.test(s) ? s : `${s.slice(0, 19)}+09:00`)
 const AREA_LABEL: Record<Filters['area'], string> = { capital: '수도권', 서울: '서울', 경기: '경기', 인천: '인천', all: '전국' }
 
 type Chip<K extends keyof Filters> = { key: K; label: string; options: [Filters[K], string][] }
@@ -83,8 +84,8 @@ const NEW_HOURS = 36
  */
 function isNew(n: NoticeView, nowMs: number) {
   if (!n.firstSeenAt || !n.rcritPblancDe || nowMs <= 0) return false
-  const seen = nowMs - Date.parse(`${n.firstSeenAt.slice(0, 19)}+09:00`) < NEW_HOURS * 36e5
-  return seen && nowMs - Date.parse(`${n.rcritPblancDe}T00:00:00+09:00`) < 3 * 864e5
+  const seen = nowMs - kstMs(n.firstSeenAt) < NEW_HOURS * 36e5
+  return seen && nowMs - kstMs(`${n.rcritPblancDe}T00:00:00`) < 3 * 864e5
 }
 
 type Mkt = { text: string; color: string; ratio: number | null }
